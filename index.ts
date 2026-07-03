@@ -76,14 +76,16 @@ type Room = {
 	lastTickSentAt  : number;
 };
 
-const PORT                    = getEnvInt("PORT", 3000);
-const JOIN_REQUEST_TIMEOUT_MS = getEnvInt("JOIN_REQUEST_TIMEOUT_MS", 30_000);
-const ROOM_ID_LENGTH          = getEnvInt("ROOM_ID_LENGTH", 6);
-const HEARTBEAT_INTERVAL_MS   = getEnvInt("HEARTBEAT_INTERVAL_MS", 1_000);
-const ROOM_EMPTY_TTL_MS       = getEnvInt("ROOM_EMPTY_TTL_MS", 60_000);
-const TICK_RATE               = getEnvInt("TICK_RATE", 30);
-const TICK_INTERVAL_MS        = Math.max(1, Math.round(1000 / TICK_RATE));
-const WS_COMPRESSION          = getEnvBool("WS_COMPRESSION", false);
+const PORT                       = getEnvInt("PORT", 3000);
+const JOIN_REQUEST_TIMEOUT_MS    = getEnvInt("JOIN_REQUEST_TIMEOUT_MS", 30_000);
+const ROOM_ID_LENGTH             = getEnvInt("ROOM_ID_LENGTH", 6);
+const HEARTBEAT_INTERVAL_MS      = getEnvInt("HEARTBEAT_INTERVAL_MS", 1_000);
+const ROOM_EMPTY_TTL_MS          = getEnvInt("ROOM_EMPTY_TTL_MS", 60_000);
+const TICK_RATE                  = getEnvInt("TICK_RATE", 30);
+const TICK_INTERVAL_MS           = Math.max(1, Math.round(1000 / TICK_RATE));
+const WS_COMPRESSION             = getEnvBool("WS_COMPRESSION", false);
+const EVENT_TIME_MAX_BACKDATE_MS = getEnvInt("EVENT_TIME_MAX_BACKDATE_MS", 200);
+const EVENT_TIME_MAX_FUTURE_MS   = getEnvInt("EVENT_TIME_MAX_FUTURE_MS", 50);
 
 const ROOM_ID_CHARS           = DEFAULT_ID_CHARS;
 const ROOM_ID_MIN_LENGTH      = 3;
@@ -457,10 +459,13 @@ function handleDataMessage(ws: WS, msg: any): void {
 	const clientTime = typeof msg.clientTime === "number" && Number.isFinite(msg.clientTime)
 		? msg.clientTime
 		: undefined;
-	const eventTime = clientTime !== undefined && ws.data.offsetToServerTime !== undefined
+	const rawEventTime = clientTime !== undefined && ws.data.offsetToServerTime !== undefined
 		? clientTime + ws.data.offsetToServerTime
 		: receivedAt;
-
+	const eventTime = Math.min(
+		Math.max(rawEventTime, receivedAt - EVENT_TIME_MAX_BACKDATE_MS),
+		receivedAt + EVENT_TIME_MAX_FUTURE_MS
+	);
 	room.queue.push({
 		from       : ws.data.playerId,
 		displayName: ws.data.displayName,
@@ -476,6 +481,7 @@ function flushRoomQueue(room: Room): void {
 	if (room.queue.length === 0) return;
 
 	const messages = room.queue.splice(0, room.queue.length) as QueuedMessage[];
+	messages.sort((a, b) => a.eventTime - b.eventTime || a.receivedAt - b.receivedAt);
 	room.tickSeq += 1;
 	room.lastTickSentAt = performance.now();
 
