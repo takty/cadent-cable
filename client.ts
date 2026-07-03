@@ -13,8 +13,6 @@ import {
 	normalizeApprovalRatio,
 	normalizeDisplayName,
 	normalizeId,
-	validateDisplayName,
-	validateId,
 } from "./utils";
 
 export type RelayConnectionOptions<TPayload = unknown> = {

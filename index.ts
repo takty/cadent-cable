@@ -116,12 +116,7 @@ const server = Bun.serve<WSData>({
 		}
 		return jsonResponse({ ok: false, error: "not_found" }, CORS_HEADERS, 404);
 	},
-	websocket: {
-		perMessageDeflate: WS_COMPRESSION,
-		open,
-		message,
-		close,
-	},
+	websocket: { perMessageDeflate: WS_COMPRESSION, open, message, close },
 });
 
 function open(ws: ServerWebSocket<WSData>) {
@@ -290,7 +285,6 @@ function createRoom(roomId: string, accessMode: AccessMode, approvalRatio: numbe
 		createdAt       : performance.now(),
 		lastTickSentAt  : 0,
 	};
-
 	room.tickTimer      = setInterval(() => flushRoomQueue(room), TICK_INTERVAL_MS);
 	room.heartbeatTimer = setInterval(() => sendHeartbeat(room), HEARTBEAT_INTERVAL_MS);
 
@@ -353,13 +347,13 @@ function createJoinRequest(room: Room, ws: WS): void {
 
 	ws.send(JSON.stringify({
 		type       : "pending",
+		serverTime : performance.now(),
 		roomId     : room.roomId,
 		requestId,
 		displayName: ws.data.displayName,
 		requiredApprovals,
 		timeoutMs  : JOIN_REQUEST_TIMEOUT_MS,
-		serverTime : performance.now(),
-	}));
+	} satisfies RelayEvent));
 	broadcastRoom(room, joinRequestMessage(room, request));
 }
 
@@ -373,7 +367,7 @@ function joinRequestMessage(room: Room, req: JoinRequest): RelayEvent {
 		requiredApprovals: req.requiredApprovals,
 		approvals        : req.approvals.size,
 		expiresAt        : req.expiresAt,
-	};
+	} satisfies RelayEvent;
 }
 
 function handleApproval(ws: WS, msg: any): void {
@@ -381,7 +375,6 @@ function handleApproval(ws: WS, msg: any): void {
 		sendError(ws, "not_active", "Only active players can approve join requests.");
 		return;
 	}
-
 	const requestId = typeof msg.requestId === "string" ? msg.requestId : "";
 	const room      = rooms.get(ws.data.roomId);
 	const req       = room?.pending.get(requestId);
@@ -390,7 +383,6 @@ function handleApproval(ws: WS, msg: any): void {
 		sendError(ws, "join_request_not_found", "Join request not found.");
 		return;
 	}
-
 	req.approvals.add(ws.data.playerId);
 
 	broadcastRoom(room, {
@@ -509,7 +501,6 @@ function handleSync(ws: WS, msg: any): void {
 		sendError(ws, "invalid_sync", "sync requires clientSendTime:number.");
 		return;
 	}
-
 	const serverRecvTime = performance.now();
 	const serverSendTime = performance.now();
 
@@ -531,7 +522,6 @@ function handleSyncResult(ws: WS, msg: any): void {
 		sendError(ws, "invalid_sync_result", "syncResult has invalid timestamp fields.");
 		return;
 	}
-
 	const rtt = (clientRecvTime - clientSendTime) - (serverSendTime - serverRecvTime);
 	const offset = ((serverRecvTime - clientSendTime) + (serverSendTime - clientRecvTime)) / 2;
 
@@ -539,12 +529,10 @@ function handleSyncResult(ws: WS, msg: any): void {
 		sendError(ws, "invalid_rtt", "Computed RTT is negative.");
 		return;
 	}
-
 	if (ws.data.rtt === undefined || rtt <= ws.data.rtt) {
 		ws.data.rtt = rtt;
 		ws.data.offsetToServerTime = offset;
 	}
-
 	ws.send(JSON.stringify({
 		type              : "syncUpdated",
 		serverTime        : performance.now(),
@@ -588,7 +576,6 @@ function deleteRoom(roomId: string, reason: string): void {
 		} satisfies RelayEvent));
 		req.ws.close(1001, "room_closed");
 	}
-
 	for (const ws of room.active) {
 		ws.send(JSON.stringify({
 			type      : "roomClosed",
@@ -598,7 +585,6 @@ function deleteRoom(roomId: string, reason: string): void {
 		} satisfies RelayEvent));
 		ws.close(1001, "room_closed");
 	}
-
 	rooms.delete(roomId);
 }
 

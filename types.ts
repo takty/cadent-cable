@@ -1,3 +1,11 @@
+/**
+ * Cadent Cable - Types
+ * Generic room-based WebSocket relay server for Bun.
+ *
+ * @author Takuto Yanagida
+ * @version 2026-07-03
+ */
+
 import type { WS, TimeoutHandle } from ".";
 
 export type AccessMode = "free" | "approval";
