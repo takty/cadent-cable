@@ -26,7 +26,7 @@ import {
 	validateId,
 	buildWebSocketUrl,
 } from './utils';
-import { getEnvBool, getEnvInt } from "./utils-server";
+import { getEnvBool, getEnvInt, getRouteName } from "./utils-server";
 import type { AccessMode, CreateRoomOptions, CreateRoomResult, JoinRequest, PlayerInfo, QueuedMessage, RelayEvent } from "./types";
 
 export type TimeoutHandle  = ReturnType<typeof setTimeout>;
@@ -102,15 +102,16 @@ const server = Bun.serve<WSData>({
 				headers: CORS_HEADERS,
 			});
 		}
-		const url = new URL(req.url);
+		const url   = new URL(req.url);
+		const route = getRouteName(url.pathname);
 
-		if (req.method === "GET" && url.pathname === "/health") {
+		if (req.method === "GET" && route === "health") {
 			return jsonResponse({ ok: true, rooms: rooms.size, now: performance.now() }, CORS_HEADERS);
 		}
-		if (req.method === "POST" && url.pathname === "/rooms") {
+		if (req.method === "POST" && route === "rooms") {
 			return await handleCreateRoom(req);
 		}
-		if (url.pathname === "/ws") {
+		if (route === "ws") {
 			return handleWebSocketUpgrade(req, server, url);
 		}
 		return jsonResponse({ ok: false, error: "not_found" }, CORS_HEADERS, 404);

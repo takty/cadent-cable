@@ -57,7 +57,7 @@ export class RelayConnection<TPayload = unknown> {
 		if (this.#ws !== null) return Promise.resolve();
 
 		return new Promise((resolve, reject) => {
-			const url = buildWebSocketUrl(this.serverUrl, "/ws", {
+			const url = buildWebSocketUrl(this.serverUrl, "ws", {
 				roomId      : this.roomId,
 				displayName : this.displayName,
 				creatorToken: this.creatorToken ?? "",
@@ -160,7 +160,7 @@ export class RelayConnection<TPayload = unknown> {
 }
 
 export async function createRoom(serverUrl: string, options: CreateRoomOptions = {}): Promise<CreateRoomResult> {
-	const res = await fetch(joinUrl(serverUrl, "/rooms"), {
+	const res = await fetch(joinUrl(serverUrl, "rooms"), {
 		method : "POST",
 		headers: { "Content-Type": "application/json" },
 		body   : JSON.stringify({

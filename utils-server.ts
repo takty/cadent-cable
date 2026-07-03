@@ -19,3 +19,10 @@ export function getEnvBool(name: string, fb: boolean): boolean {
 
 	return ['1', 'true', 'yes', 'on'].includes(v.toLowerCase());
 }
+
+// ---
+
+export function getRouteName(pathname: string): string {
+	const parts = pathname.split("/").filter(Boolean);
+	return parts.at(-1) ?? "";
+}

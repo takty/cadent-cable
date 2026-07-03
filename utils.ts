@@ -86,14 +86,13 @@ export function normalizeApprovalRatio(v: unknown): number {
 // ---
 
 export function joinUrl(serverUrl: string, path: string): string {
-	const url = new URL(serverUrl);
-	url.pathname = path;
-	url.search   = "";
+	const url = new URL(normalizeEndpointPath(path), asDirectoryUrl(serverUrl));
+	url.search = "";
 	return url.toString();
 }
 
 export function buildWebSocketUrl(baseUrl: string | URL, path: string, params: Record<string, string | number | boolean | null | undefined> = {}, isRelative: boolean = false): string {
-	const url = new URL(path, baseUrl);
+	const url = new URL(normalizeEndpointPath(path), asDirectoryUrl(baseUrl));
 
 	switch (url.protocol) {
 		case "http:" : url.protocol = "ws:";  break;
@@ -112,4 +111,14 @@ export function buildWebSocketUrl(baseUrl: string | URL, path: string, params: R
 		return `${url.pathname}${url.search}`;
 	}
 	return url.toString();
+}
+
+function normalizeEndpointPath(path: string): string {
+	return path.replace(/^\/+/, "");
+}
+
+function asDirectoryUrl(baseUrl: string | URL): URL {
+	const url = new URL(baseUrl);
+	if (!url.pathname.endsWith("/")) url.pathname += "/";
+	return url;
 }
