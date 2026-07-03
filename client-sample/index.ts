@@ -98,12 +98,11 @@ async function connect(options: { creatorToken?: string }) {
 		autoSync      : true,
 		syncIntervalMs: 3000,
 		onEvent       : handleRelayEvent,
-	} satisfies RelayConnectionOptions);
+	} satisfies RelayConnectionOptions<GamePayload>);
 	await conn.connect();
 }
 
 function handleRelayEvent(ev: RelayEvent<GamePayload>) {
-	console.log(ev.type);
 	switch (ev.type) {
 		case "open":
 			setStatus("Connected. Waiting for join result...");
