@@ -1,8 +1,9 @@
-import { createRoom, RelayConnection, RelayConnectionOptions } from "../client";
+import { createRoom, RelayConnection, type RelayConnectionOptions } from "../client";
 import { type CreateRoomOptions, type PlayerInfo, type QueuedMessage } from "../types";
 import { type RelayEvent } from "../types";
 
-const SERVER_URL = "http://localhost:3000";
+// const SERVER_URL = "http://localhost:3000";
+const SERVER_URL = "http://10.13.106.132:3000/cadent-cable";
 const FLASH_MS   = 30;
 
 type GamePayload = {

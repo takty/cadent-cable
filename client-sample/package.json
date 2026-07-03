@@ -5,7 +5,8 @@
 	"type": "module",
 	"scripts": {
 		"build": "bun run build-client.mjs",
-		"serve": "bun run static-server.mjs"
+		"serve": "bun run static-server.mjs",
+		"static": "bun build --compile --target=browser ./index.html --outdir=dist"
 	},
 	"devDependencies": {
 		"@types/bun": "latest"
