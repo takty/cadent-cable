@@ -6,8 +6,6 @@
  * @version 2026-07-03
  */
 
-import type { WS, TimeoutHandle } from ".";
-
 export type AccessMode = "free" | "approval";
 
 export type CreateRoomOptions = {
@@ -23,20 +21,6 @@ export type CreateRoomResult = {
 	approvalRatio: number;
 	creatorToken : string;
 	joinUrl?     : string;
-};
-
-// ---
-
-export type JoinRequest = {
-	requestId        : string;
-	roomId           : string;
-	ws               : WS;
-	displayName      : string;
-	requiredApprovals: number;
-	approvals        : Set<string>;
-	createdAt        : number;
-	expiresAt        : number;
-	timer            : TimeoutHandle;
 };
 
 // ---
@@ -57,7 +41,7 @@ export type RelayEvent<TPayload = unknown> = { type: "open"; } |
 
 	{ type: "syncReply",  clientSendTime: number; serverRecvTime: number; serverSendTime: number; } |
 
-	{ type: "joined";              serverTime: number; roomId: string; playerId: string; displayName: string; players: PlayerInfo[]; } |
+	{ type: "joined";              serverTime: number; roomId: string; playerId: string; displayName: string; accessMode: AccessMode; players: PlayerInfo[]; } |
 	{ type: "pending";             serverTime: number; roomId: string; requestId: string; displayName: string; requiredApprovals: number; timeoutMs: number; } |
 	{ type: "joinRequest";         serverTime: number; roomId: string; requestId: string; displayName: string; requiredApprovals: number; approvals: number; expiresAt: number; } |
 	{ type: "joinRequestUpdated";  serverTime: number; roomId: string; requestId: string; approvals: number; requiredApprovals: number; } |
@@ -68,9 +52,8 @@ export type RelayEvent<TPayload = unknown> = { type: "open"; } |
 	{ type: "playerLeft";          serverTime: number; roomId: string; playerId: string; displayName: string; } |
 	{ type: "tick";                serverTime: number; roomId: string; tickSeq: number; messages: QueuedMessage<TPayload>[]; } |
 	{ type: "heartbeat";           serverTime: number; roomId: string; tickSeq: number; players: PlayerInfo[]; } |
-	{ type: "syncUpdated";         serverTime: number; rtt: number; offsetToServerTime: number; } |
-
-	{ type: string;[key: string]: unknown; };
+	{ type: "roomClosed";          serverTime: number; roomId: string; reason: string; } |
+	{ type: "syncUpdated";         serverTime: number; rtt: number; offsetToServerTime: number; };
 
 export type QueuedMessage<TPayload = unknown> = {
 	from       : string;

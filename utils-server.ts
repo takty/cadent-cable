@@ -26,3 +26,11 @@ export function getRouteName(pathname: string): string {
 	const parts = pathname.split("/").filter(Boolean);
 	return parts.at(-1) ?? "";
 }
+
+export function getEndpointBaseUrl(reqUrl: string): URL {
+	const url = new URL(reqUrl);
+	url.pathname = url.pathname.replace(/\/+$/, "").replace(/\/[^/]*$/, "/");
+	url.search   = "";
+	url.hash     = "";
+	return url;
+}

@@ -26,8 +26,8 @@ import {
 	validateId,
 	buildWebSocketUrl,
 } from './utils';
-import { getEnvBool, getEnvInt, getRouteName } from "./utils-server";
-import type { AccessMode, CreateRoomOptions, CreateRoomResult, JoinRequest, PlayerInfo, QueuedMessage, RelayEvent } from "./types";
+import { getEnvBool, getEnvInt, getRouteName, getEndpointBaseUrl } from "./utils-server";
+import type { AccessMode, CreateRoomOptions, CreateRoomResult, PlayerInfo, QueuedMessage, RelayEvent } from "./types";
 
 export type TimeoutHandle  = ReturnType<typeof setTimeout>;
 type IntervalHandle        = ReturnType<typeof setInterval>;
@@ -46,6 +46,18 @@ type WSData = {
 };
 
 export type WS = ServerWebSocket<WSData>;
+
+export type JoinRequest = {
+	requestId        : string;
+	roomId           : string;
+	ws               : WS;
+	displayName      : string;
+	requiredApprovals: number;
+	approvals        : Set<string>;
+	createdAt        : number;
+	expiresAt        : number;
+	timer            : TimeoutHandle;
+};
 
 type Room = {
 	roomId          : string;
@@ -97,10 +109,7 @@ const server = Bun.serve<WSData>({
 
 	async fetch(req, server) {
 		if (req.method === "OPTIONS") {
-			return new Response(null, {
-				status : 204,
-				headers: CORS_HEADERS,
-			});
+			return new Response(null, { status: 204, headers: CORS_HEADERS });
 		}
 		const url   = new URL(req.url);
 		const route = getRouteName(url.pathname);
@@ -166,10 +175,10 @@ function close(ws: ServerWebSocket<WSData>) {
 		room.active.delete(ws);
 		broadcastRoom(room, {
 			type       : "playerLeft",
-			roomId     : room.roomId,
-			playerId   : ws.data.playerId,
-			displayName: ws.data.displayName,
 			serverTime : performance.now(),
+			roomId     : room.roomId,
+			playerId   : ws.data.playerId as string,
+			displayName: ws.data.displayName,
 		} satisfies RelayEvent);
 		maybeScheduleEmptyRoomDeletion(room);
 		return;
@@ -231,7 +240,7 @@ async function handleCreateRoom(req: Request): Promise<Response> {
 		accessMode   : room.accessMode,
 		approvalRatio: room.approvalRatio,
 		creatorToken : room.creatorToken,
-		joinUrl      : buildWebSocketUrl(req.url, "/ws", {
+		joinUrl      : buildWebSocketUrl(getEndpointBaseUrl(req.url), "ws", {
 			roomId      : room.roomId,
 			displayName : "...",
 			creatorToken: room.creatorToken,
@@ -303,11 +312,11 @@ function activateConnection(room: Room, ws: WS): void {
 
 	ws.send(JSON.stringify({
 		type       : "joined",
+		serverTime : performance.now(),
 		roomId     : room.roomId,
 		playerId   : ws.data.playerId,
 		displayName: ws.data.displayName,
 		accessMode : room.accessMode,
-		serverTime : performance.now(),
 		players    : getPlayers(room),
 	} satisfies RelayEvent));
 
@@ -537,7 +546,7 @@ function handleSyncResult(ws: WS, msg: any): void {
 		type              : "syncUpdated",
 		serverTime        : performance.now(),
 		rtt               : ws.data.rtt,
-		offsetToServerTime: ws.data.offsetToServerTime,
+		offsetToServerTime: ws.data.offsetToServerTime as number,
 	} satisfies RelayEvent));
 }
 
