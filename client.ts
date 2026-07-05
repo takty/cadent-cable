@@ -3,7 +3,7 @@
  * Generic room-based WebSocket relay server for Bun.
  *
  * @author Takuto Yanagida
- * @version 2026-07-03
+ * @version 2026-07-06
  */
 
 import type { CreateRoomOptions, CreateRoomResult, RelayEvent } from "./types";
@@ -163,6 +163,7 @@ export async function createRoom(serverUrl: string, options: CreateRoomOptions =
 		headers: { "Content-Type": "application/json" },
 		body   : JSON.stringify({
 			roomId       : options.roomId ?? null,
+			roomMode     : options.roomMode ?? "broadcast",
 			accessMode   : options.accessMode ?? "free",
 			approvalRatio: normalizeApprovalRatio(options.approvalRatio),
 		} satisfies CreateRoomOptions),

@@ -3,13 +3,18 @@
  * Generic room-based WebSocket relay server for Bun.
  *
  * @author Takuto Yanagida
- * @version 2026-07-03
+ * @version 2026-07-06
  */
+
+export type RoomMode = "broadcast" | "remote";
 
 export type AccessMode = "free" | "approval";
 
+export type ClientRole = "player" | "receiver" | "controller";
+
 export type CreateRoomOptions = {
 	roomId?       : string | null;
+	roomMode?     : RoomMode;
 	accessMode?   : AccessMode;
 	approvalRatio?: number;
 };
@@ -17,10 +22,12 @@ export type CreateRoomOptions = {
 export type CreateRoomResult = {
 	ok           : true;
 	roomId       : string;
+	roomMode     : RoomMode;
 	accessMode   : AccessMode;
 	approvalRatio: number;
 	creatorToken : string;
 	joinUrl?     : string;
+	ownerJoinUrl?: string;
 };
 
 // ---
@@ -41,7 +48,7 @@ export type RelayEvent<TPayload = unknown> = { type: "open"; } |
 
 	{ type: "syncReply",  clientSendTime: number; serverRecvTime: number; serverSendTime: number; } |
 
-	{ type: "joined";              serverTime: number; roomId: string; playerId: string; displayName: string; accessMode: AccessMode; players: PlayerInfo[]; } |
+	{ type: "joined";              serverTime: number; roomId: string; playerId: string; displayName: string; roomMode: RoomMode; accessMode: AccessMode; role: ClientRole; players: PlayerInfo[]; } |
 	{ type: "pending";             serverTime: number; roomId: string; requestId: string; displayName: string; requiredApprovals: number; timeoutMs: number; } |
 	{ type: "joinRequest";         serverTime: number; roomId: string; requestId: string; displayName: string; requiredApprovals: number; approvals: number; expiresAt: number; } |
 	{ type: "joinRequestUpdated";  serverTime: number; roomId: string; requestId: string; approvals: number; requiredApprovals: number; } |
@@ -67,4 +74,11 @@ export type QueuedMessage<TPayload = unknown> = {
 export type PlayerInfo = {
 	playerId   : string;
 	displayName: string;
+	role       : ClientRole;
+};
+
+export type ViewPlayerInfo = {
+	playerId   : string;
+	displayName: string;
+	role?      : PlayerInfo["role"];
 };

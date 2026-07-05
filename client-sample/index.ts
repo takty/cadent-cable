@@ -1,5 +1,5 @@
 import { createRoom, RelayConnection, type RelayConnectionOptions } from "../client";
-import { type CreateRoomOptions, type PlayerInfo, type QueuedMessage } from "../types";
+import { type CreateRoomOptions, type PlayerInfo, type ViewPlayerInfo, type QueuedMessage } from "../types";
 import { type RelayEvent } from "../types";
 
 // const SERVER_URL = "http://localhost:3000";
@@ -15,7 +15,7 @@ let roomId       = "";
 let creatorToken = "";
 let myPlayerId   = "";
 
-const players     = new Map<string, PlayerInfo>();
+const players     = new Map<string, ViewPlayerInfo>();
 const flashTimers = new Map<string, number>();
 
 const $ = <T extends HTMLElement>(id: string): T => {
