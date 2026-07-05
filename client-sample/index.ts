@@ -2,8 +2,8 @@ import { createRoom, RelayConnection, type RelayConnectionOptions } from "../cli
 import { type CreateRoomOptions, type PlayerInfo, type ViewPlayerInfo, type QueuedMessage } from "../types";
 import { type RelayEvent } from "../types";
 
-// const SERVER_URL = "http://localhost:3000";
-const SERVER_URL = "http://10.13.106.132:3000/cadent-cable";
+const SERVER_URL = "http://localhost:3000/cadent-cable";
+// const SERVER_URL = "http://10.13.106.132:3000/cadent-cable";
 const FLASH_MS   = 30;
 
 type GamePayload = {
@@ -11,9 +11,9 @@ type GamePayload = {
 };
 
 let conn: RelayConnection<GamePayload> | null = null;
-let roomId       = "";
-let creatorToken = "";
-let myPlayerId   = "";
+let roomId     = "";
+let ownerToken = "";
+let myPlayerId = "";
 
 const players     = new Map<string, ViewPlayerInfo>();
 const flashTimers = new Map<string, number>();
@@ -45,11 +45,11 @@ createButton.addEventListener("click", async () => {
 			approvalRatio: Number(approvalRatioInput.value) || 0.5,
 		} satisfies CreateRoomOptions);
 		roomId            = result.roomId;
-		creatorToken      = result.creatorToken;
+		ownerToken      = result.ownerToken;
 		roomIdInput.value = roomId;
 
 		setStatus(`Room created: ${roomId}`);
-		await connect({ creatorToken });
+		await connect({ ownerToken });
 	} catch (e) {
 		setStatus(errorMessage(e));
 	}
@@ -58,7 +58,7 @@ createButton.addEventListener("click", async () => {
 joinButton.addEventListener("click", async () => {
 	try {
 		roomId       = roomIdInput.value.trim().toUpperCase();
-		creatorToken = "";
+		ownerToken = "";
 		await connect({});
 	} catch (e) {
 		setStatus(errorMessage(e));
@@ -79,7 +79,7 @@ leaveButton.addEventListener("click", () => {
 	setStatus("Disconnected.");
 });
 
-async function connect(options: { creatorToken?: string }) {
+async function connect(options: { ownerToken?: string }) {
 	const displayName = displayNameInput.value.trim();
 	if (!roomId) throw new Error("Room ID is empty.");
 	if (!displayName) throw new Error("Display name is empty.");
@@ -94,7 +94,7 @@ async function connect(options: { creatorToken?: string }) {
 		serverUrl     : SERVER_URL,
 		roomId,
 		displayName,
-		creatorToken  : options.creatorToken,
+		ownerToken  : options.ownerToken,
 		autoSync      : true,
 		syncIntervalMs: 3000,
 		onEvent       : handleRelayEvent,

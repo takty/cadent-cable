@@ -19,17 +19,17 @@ export type RelayConnectionOptions<TPayload = unknown> = {
 	serverUrl      : string;
 	roomId         : string;
 	displayName    : string;
-	creatorToken?  : string;
+	ownerToken?    : string;
 	autoSync?      : boolean;
 	syncIntervalMs?: number;
 	onEvent?       : (event: RelayEvent<TPayload>) => void;
 };
 
 export class RelayConnection<TPayload = unknown> {
-	readonly serverUrl    : string;
-	readonly roomId       : string;
-	readonly displayName  : string;
-	readonly creatorToken?: string;
+	readonly serverUrl  : string;
+	readonly roomId     : string;
+	readonly displayName: string;
+	readonly ownerToken?: string;
 
 	playerId          : string | null = null;
 	rtt               : number | null = null;
@@ -45,7 +45,7 @@ export class RelayConnection<TPayload = unknown> {
 		this.serverUrl       = options.serverUrl;
 		this.roomId          = normalizeId(options.roomId);
 		this.displayName     = normalizeDisplayName(options.displayName);
-		this.creatorToken    = options.creatorToken;
+		this.ownerToken    = options.ownerToken;
 		this.#onEvent        = options.onEvent ?? (() => {});
 		this.#autoSync       = options.autoSync ?? true;
 		this.#syncIntervalMs = options.syncIntervalMs ?? 3000;
@@ -56,9 +56,9 @@ export class RelayConnection<TPayload = unknown> {
 
 		return new Promise((resolve, reject) => {
 			const url = buildWebSocketUrl(this.serverUrl, "ws", {
-				roomId      : this.roomId,
-				displayName : this.displayName,
-				creatorToken: this.creatorToken ?? "",
+				roomId     : this.roomId,
+				displayName: this.displayName,
+				ownerToken : this.ownerToken ?? "",
 			});
 			const ws = new WebSocket(url);
 			this.#ws = ws;

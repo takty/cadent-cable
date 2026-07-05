@@ -25,7 +25,7 @@ export type CreateRoomResult = {
 	roomMode     : RoomMode;
 	accessMode   : AccessMode;
 	approvalRatio: number;
-	creatorToken : string;
+	ownerToken   : string;
 	joinUrl?     : string;
 	ownerJoinUrl?: string;
 };

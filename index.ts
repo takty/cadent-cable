@@ -2,8 +2,8 @@
  * Cadent Cable - Server
  * Generic room-based WebSocket relay server for Bun.
  *
- * - HTTP POST /rooms creates a room and returns { roomId, creatorToken }
- * - WebSocket /ws?roomId=...&displayName=...&creatorToken=... joins a room
+ * - HTTP POST /rooms creates a room and returns { roomId, ownerToken }
+ * - WebSocket /ws?roomId=...&displayName=...&ownerToken=... joins a room
  * - One WebSocket connection belongs to exactly one room
  * - Server relays JSON game payloads at 30Hz when data exists
  * - Server sends low-frequency heartbeats when no data exists
@@ -61,21 +61,21 @@ export type JoinRequest = {
 };
 
 type Room = {
-	roomId          : string;
-	roomMode        : RoomMode;
-	accessMode      : AccessMode;
-	approvalRatio   : number;
-	creatorToken    : string;
-	receiver?       : WS;
-	active          : Set<WS>;
-	pending         : Map<string, JoinRequest>;
-	queue           : QueuedMessage[];
-	tickSeq         : number;
-	tickTimer       : IntervalHandle;
-	heartbeatTimer  : IntervalHandle;
-	emptyTimer?     : TimeoutHandle;
-	createdAt       : number;
-	lastTickSentAt  : number;
+	roomId        : string;
+	roomMode      : RoomMode;
+	accessMode    : AccessMode;
+	approvalRatio : number;
+	ownerToken    : string;
+	receiver?     : WS;
+	active        : Set<WS>;
+	pending       : Map<string, JoinRequest>;
+	queue         : QueuedMessage[];
+	tickSeq       : number;
+	tickTimer     : IntervalHandle;
+	heartbeatTimer: IntervalHandle;
+	emptyTimer?   : TimeoutHandle;
+	createdAt     : number;
+	lastTickSentAt: number;
 };
 
 const PORT                       = getEnvInt("PORT", 3000);
@@ -266,23 +266,23 @@ async function handleCreateRoom(req: Request): Promise<Response> {
 		roomMode     : room.roomMode,
 		accessMode   : room.accessMode,
 		approvalRatio: room.approvalRatio,
-		creatorToken : room.creatorToken,
+		ownerToken : room.ownerToken,
 		joinUrl      : buildWebSocketUrl(base, "ws", {
 			roomId      : room.roomId,
 			displayName : "...",
 		}, true),
 		ownerJoinUrl : buildWebSocketUrl(base, "ws", {
-			roomId      : room.roomId,
-			displayName : "...",
-			creatorToken: room.creatorToken,
+			roomId     : room.roomId,
+			displayName: "...",
+			ownerToken : room.ownerToken,
 		}, true),
 	} satisfies CreateRoomResult, CORS_HEADERS);
 }
 
 function handleWebSocketUpgrade(req: Request, server: Server<WSData>, url: URL): Response | undefined {
-	const roomId       = normalizeId(url.searchParams.get("roomId") ?? "");
-	const displayName  = normalizeDisplayName(url.searchParams.get("displayName") ?? "");
-	const creatorToken = url.searchParams.get("creatorToken") ?? "";
+	const roomId      = normalizeId(url.searchParams.get("roomId") ?? "");
+	const displayName = normalizeDisplayName(url.searchParams.get("displayName") ?? "");
+	const ownerToken  = url.searchParams.get("ownerToken") ?? "";
 
 	const room = rooms.get(roomId);
 	if (!room) return jsonResponse({ ok: false, error: "room_not_found" }, CORS_HEADERS, 404);
@@ -293,12 +293,9 @@ function handleWebSocketUpgrade(req: Request, server: Server<WSData>, url: URL):
 	const displayNameError = validateDisplayName(displayName, DISPLAY_NAME_MAX_LENGTH);
 	if (displayNameError) return jsonResponse({ ok: false, error: displayNameError }, CORS_HEADERS, 400);
 
-	const isCreator = creatorToken !== "" && creatorToken === room.creatorToken;
-	const role: ClientRole = room.roomMode === "remote"
-		? (isCreator ? "receiver" : "controller")
-		: "player";
-
-	const state: ConnState = isCreator || room.accessMode === "free" ? "active" : "pending";
+	const isOwner           = ownerToken !== "" && ownerToken === room.ownerToken;
+	const role : ClientRole = room.roomMode === "remote" ? (isOwner ? "receiver" : "controller") : "player";
+	const state: ConnState  = isOwner || room.accessMode === "free" ? "active" : "pending";
 
 	const ok = server.upgrade(req, {
 		data: {
@@ -310,7 +307,6 @@ function handleWebSocketUpgrade(req: Request, server: Server<WSData>, url: URL):
 		},
 	});
 	if (!ok) return jsonResponse({ ok: false, error: "websocket_upgrade_failed" }, CORS_HEADERS, 500);
-	// if (isCreator) room.creatorTokenUsed = true;
 	return undefined;
 }
 
@@ -320,7 +316,7 @@ function createRoom(roomId: string, roomMode: RoomMode, accessMode: AccessMode, 
 		roomMode,
 		accessMode,
 		approvalRatio,
-		creatorToken    : createId("creator"),
+		ownerToken    : createId("owner"),
 		active          : new Set(),
 		pending         : new Map(),
 		queue           : [],
