@@ -30,7 +30,7 @@ export type CreateRoomResult = {
 
 // -----------------------------------------------------------------------------
 
-export type RelayEvent<TPayload = unknown> = { type: 'open'; } |
+export type RelayEvent<TPayload = unknown> =
 	{ type: 'open'; } |
 	{ type: 'close'; code: number; reason: string; } |
 	{ type: 'error'; code?: string; message?: string; } |

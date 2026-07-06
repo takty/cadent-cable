@@ -232,7 +232,7 @@ async function handleCreateRoom(req: Request): Promise<Response> {
 	} catch {
 		body = {};
 	}
-	const rMode: RoomMode = body.roomMode   === 'remote'   ? 'remote'   : 'broadcast';
+	const rMode: RoomMode = body.roomMode === 'remote' ? 'remote' : 'broadcast';
 	const ratio           = normalizeApprovalRatio(body.approvalRatio);
 
 	let roomId: string;
@@ -284,9 +284,11 @@ function handleWebSocketUpgrade(req: Request, server: Server<WSData>, url: URL):
 	const displayNameError = validateDisplayName(displayName, DISPLAY_NAME_MAX_LENGTH);
 	if (displayNameError) return jsonResponse({ ok: false, error: displayNameError }, CORS_HEADERS, 400);
 
-	const isOwner               = ownerToken !== '' && ownerToken === room.ownerToken;
-	const role : MemberRole = room.roomMode === 'remote' ? (isOwner ? 'receiver' : 'controller') : 'member';
-	const state: ConnState      = isOwner || room.approvalRatio === 0 ? 'active' : 'pending';
+	const isOwner    = ownerToken !== '' && ownerToken === room.ownerToken;
+	const isReceiver = room.roomMode === 'remote' && isOwner;
+
+	const role : MemberRole = room.roomMode === 'remote' ? (isReceiver ? 'receiver' : 'controller') : 'member';
+	const state: ConnState  = isReceiver || room.approvalRatio === 0 ? 'active' : 'pending';
 
 	const ok = server.upgrade(req, {
 		data: {
@@ -327,7 +329,7 @@ function activateConnection(room: Room, ws: WS): void {
 	clearEmptyRoomDeletion(room);
 
 	ws.data.state     = 'active';
-	ws.data.memberId  = createId('p');
+	ws.data.memberId  = createId('m');
 	ws.data.requestId = undefined;
 
 	if (room.roomMode === 'remote' && ws.data.role === 'receiver') {
@@ -363,7 +365,7 @@ function activateConnection(room: Room, ws: WS): void {
 				roomId     : room.roomId,
 				memberId   : ws.data.memberId,
 				displayName: ws.data.displayName,
-				members,
+				members    : getMembers(room),
 			} satisfies RelayEvent);
 		}
 		if (ws.data.role === 'receiver') {
@@ -592,7 +594,7 @@ function sendHeartbeat(room: Room): void {
 function handleSync(ws: WS, msg: any): void {
 	const clientSendTime = Number(msg.clientSendTime);
 	if (!Number.isFinite(clientSendTime)) {
-		sendError(ws, 'invalid_sync', 'sync requires clientSendTime:number.');
+		sendError(ws, 'invalid_sync_request', 'syncRequest requires clientSendTime:number.');
 		return;
 	}
 	const serverRecvTime = performance.now();
@@ -608,7 +610,7 @@ function handleSyncResult(ws: WS, msg: any): void {
 	const serverSendTime = Number(msg.serverSendTime);
 
 	if (![clientSendTime, clientRecvTime, serverRecvTime, serverSendTime].every(Number.isFinite)) {
-		sendError(ws, 'invalid_sync_result', 'syncResult has invalid timestamp fields.');
+		sendError(ws, 'invalid_sync_report', 'syncReport has invalid timestamp fields.');
 		return;
 	}
 	const rtt    = (clientRecvTime - clientSendTime) - (serverSendTime - serverRecvTime);
