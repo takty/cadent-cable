@@ -2,7 +2,7 @@
  * Utilities
  *
  * @author Takuto Yanagida
- * @version 2026-07-03
+ * @version 2026-07-06
  */
 
 export type IdValidationOptions = {
@@ -18,12 +18,12 @@ export function jsonResponse(v: unknown, headers = {}, status = 200): Response {
 		status,
 		headers: {
 			...headers,
-			"Content-Type": "application/json; charset=utf-8",
+			'Content-Type': 'application/json; charset=utf-8',
 		},
 	});
 }
 
-// ---
+// -----------------------------------------------------------------------------
 
 export function createId(pf: string): string {
 	return `${pf}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
@@ -64,7 +64,7 @@ export function validateId(id: string, opts: IdValidationOptions): string | null
 	return null;
 }
 
-// ---
+// -----------------------------------------------------------------------------
 
 export function normalizeDisplayName(v: string): string {
 	return v.trim();
@@ -76,18 +76,18 @@ export function validateDisplayName(dn: string, maxLen: number): string | null {
 	return null;
 }
 
-// ---
+// -----------------------------------------------------------------------------
 
 export function normalizeApprovalRatio(v: unknown): number {
 	if (typeof v !== 'number' || !Number.isFinite(v)) return 0.5;
 	return v <= 0 ? 0.5 : Math.min(v, 1);
 }
 
-// ---
+// -----------------------------------------------------------------------------
 
 export function joinUrl(serverUrl: string, path: string): string {
 	const url = new URL(normalizeEndpointPath(path), asDirectoryUrl(serverUrl));
-	url.search = "";
+	url.search = '';
 	return url.toString();
 }
 
@@ -95,16 +95,16 @@ export function buildWebSocketUrl(baseUrl: string | URL, path: string, params: R
 	const url = new URL(normalizeEndpointPath(path), asDirectoryUrl(baseUrl));
 
 	switch (url.protocol) {
-		case "http:" : url.protocol = "ws:";  break;
-		case "https:": url.protocol = "wss:"; break;
-		case "ws:"   : break;
-		case "wss:"  : break;
-		default      : url.protocol = "ws:";
+		case 'http:' : url.protocol = 'ws:';  break;
+		case 'https:': url.protocol = 'wss:'; break;
+		case 'ws:'   : break;
+		case 'wss:'  : break;
+		default      : url.protocol = 'ws:';
 	}
-	url.search = "";
+	url.search = '';
 
 	for (const [key, value] of Object.entries(params)) {
-		if (value === null || value === undefined || value === "") continue;
+		if (value === null || value === undefined || value === '') continue;
 		url.searchParams.set(key, String(value));
 	}
 	if (isRelative) {
@@ -114,11 +114,11 @@ export function buildWebSocketUrl(baseUrl: string | URL, path: string, params: R
 }
 
 function normalizeEndpointPath(path: string): string {
-	return path.replace(/^\/+/, "");
+	return path.replace(/^\/+/, '');
 }
 
 function asDirectoryUrl(baseUrl: string | URL): URL {
 	const url = new URL(baseUrl);
-	if (!url.pathname.endsWith("/")) url.pathname += "/";
+	if (!url.pathname.endsWith('/')) url.pathname += '/';
 	return url;
 }

@@ -6,14 +6,18 @@
  * @version 2026-07-06
  */
 
-import type { CreateRoomOptions, CreateRoomResult, RelayEvent } from "./types";
+import type {
+	CreateRoomOptions,
+	CreateRoomResult,
+	RelayEvent
+} from './types';
 import {
 	buildWebSocketUrl,
 	joinUrl,
 	normalizeApprovalRatio,
 	normalizeDisplayName,
 	normalizeId,
-} from "./utils";
+} from './utils';
 
 export type RelayConnectionOptions<TPayload = unknown> = {
 	serverUrl      : string;
@@ -45,7 +49,7 @@ export class RelayConnection<TPayload = unknown> {
 		this.serverUrl       = options.serverUrl;
 		this.roomId          = normalizeId(options.roomId);
 		this.displayName     = normalizeDisplayName(options.displayName);
-		this.ownerToken    = options.ownerToken;
+		this.ownerToken      = options.ownerToken;
 		this.#onEvent        = options.onEvent ?? (() => {});
 		this.#autoSync       = options.autoSync ?? true;
 		this.#syncIntervalMs = options.syncIntervalMs ?? 3000;
@@ -55,29 +59,29 @@ export class RelayConnection<TPayload = unknown> {
 		if (this.#ws !== null) return Promise.resolve();
 
 		return new Promise((resolve, reject) => {
-			const url = buildWebSocketUrl(this.serverUrl, "ws", {
+			const url = buildWebSocketUrl(this.serverUrl, 'ws', {
 				roomId     : this.roomId,
 				displayName: this.displayName,
-				ownerToken : this.ownerToken ?? "",
+				ownerToken : this.ownerToken ?? '',
 			});
 			const ws = new WebSocket(url);
 			this.#ws = ws;
 
-			ws.addEventListener("open", () => {
-				this.#emit({ type: "open" } satisfies RelayEvent);
+			ws.addEventListener('open', () => {
+				this.#emit({ type: 'open' } satisfies RelayEvent);
 				if (this.#autoSync) this.startSync();
 				resolve();
 			});
-			ws.addEventListener("message", (ev) => this.#handleMessage(ev.data));
+			ws.addEventListener('message', (ev) => this.#handleMessage(ev.data));
 
-			ws.addEventListener("close", (ev) => {
+			ws.addEventListener('close', (ev) => {
 				this.stopSync();
 				this.#ws = null;
-				this.#emit({ type: "close", code: ev.code, reason: ev.reason } satisfies RelayEvent);
+				this.#emit({ type: 'close', code: ev.code, reason: ev.reason } satisfies RelayEvent);
 			});
-			ws.addEventListener("error", () => {
-				this.#emit({ type: "error", code: "websocket_error" } satisfies RelayEvent);
-				reject(new Error("WebSocket connection failed."));
+			ws.addEventListener('error', () => {
+				this.#emit({ type: 'error', code: 'websocket_error' } satisfies RelayEvent);
+				reject(new Error('WebSocket connection failed.'));
 			});
 		});
 	}
@@ -89,15 +93,15 @@ export class RelayConnection<TPayload = unknown> {
 	}
 
 	sendData(payload: TPayload): void {
-		this.#send({ type: "data", clientTime: performance.now(), payload });
+		this.#send({ type: 'data', clientTime: performance.now(), payload });
 	}
 
 	approve(requestId: string): void {
-		this.#send({ type: "approve", requestId });
+		this.#send({ type: 'approve', requestId });
 	}
 
 	syncOnce(): void {
-		this.#send({ type: "sync", clientSendTime: performance.now() });
+		this.#send({ type: 'syncRequest', clientSendTime: performance.now() });
 	}
 
 	startSync(): void {
@@ -115,29 +119,29 @@ export class RelayConnection<TPayload = unknown> {
 
 	#send(value: unknown): void {
 		if (!this.#ws || this.#ws.readyState !== WebSocket.OPEN) {
-			throw new Error("WebSocket is not open.");
+			throw new Error('WebSocket is not open.');
 		}
 		this.#ws.send(JSON.stringify(value));
 	}
 
 	#handleMessage(data: unknown): void {
-		if (typeof data !== "string") {
-			this.#emit({ type: "error", code: "unsupported_message", message: "Only JSON text messages are supported." } satisfies RelayEvent);
+		if (typeof data !== 'string') {
+			this.#emit({ type: 'error', code: 'unsupported_message', message: 'Only JSON text messages are supported.' } satisfies RelayEvent);
 			return;
 		}
 		let msg: RelayEvent;
 		try {
 			msg = JSON.parse(data) as RelayEvent;
 		} catch {
-			this.#emit({ type: "error", code: "invalid_json", message: "Received invalid JSON." } satisfies RelayEvent);
+			this.#emit({ type: 'error', code: 'invalid_json', message: 'Received invalid JSON.' } satisfies RelayEvent);
 			return;
 		}
-		if (msg.type === "joined") {
+		if (msg.type === 'joined') {
 			this.playerId = msg.playerId as string;
 		}
-		if (msg.type === "syncReply") {
+		if (msg.type === 'syncResponse') {
 			this.#send({
-				type          : "syncResult",
+				type          : 'syncReport',
 				clientSendTime: msg.clientSendTime,
 				serverRecvTime: msg.serverRecvTime,
 				serverSendTime: msg.serverSendTime,
@@ -145,7 +149,7 @@ export class RelayConnection<TPayload = unknown> {
 			} satisfies RelayEvent);
 			return;
 		}
-		if (msg.type === "syncUpdated") {
+		if (msg.type === 'syncStatus') {
 			this.rtt                = msg.rtt as number;
 			this.offsetToServerTime = msg.offsetToServerTime as number;
 		}
@@ -158,13 +162,13 @@ export class RelayConnection<TPayload = unknown> {
 }
 
 export async function createRoom(serverUrl: string, options: CreateRoomOptions = {}): Promise<CreateRoomResult> {
-	const res = await fetch(joinUrl(serverUrl, "rooms"), {
-		method : "POST",
-		headers: { "Content-Type": "application/json" },
+	const res = await fetch(joinUrl(serverUrl, 'rooms'), {
+		method : 'POST',
+		headers: { 'Content-Type': 'application/json' },
 		body   : JSON.stringify({
 			roomId       : options.roomId ?? null,
-			roomMode     : options.roomMode ?? "broadcast",
-			accessMode   : options.accessMode ?? "free",
+			roomMode     : options.roomMode ?? 'broadcast',
+			accessMode   : options.accessMode ?? 'free',
 			approvalRatio: normalizeApprovalRatio(options.approvalRatio),
 		} satisfies CreateRoomOptions),
 	});

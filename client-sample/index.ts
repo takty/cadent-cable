@@ -1,19 +1,19 @@
-import { createRoom, RelayConnection, type RelayConnectionOptions } from "../client";
-import { type CreateRoomOptions, type PlayerInfo, type ViewPlayerInfo, type QueuedMessage } from "../types";
-import { type RelayEvent } from "../types";
+import { createRoom, RelayConnection, type RelayConnectionOptions } from '../client';
+import { type CreateRoomOptions, type PlayerInfo, type ViewPlayerInfo, type QueuedMessage } from '../types';
+import { type RelayEvent } from '../types';
 
-const SERVER_URL = "http://localhost:3000/cadent-cable";
-// const SERVER_URL = "http://10.13.106.132:3000/cadent-cable";
+const SERVER_URL = 'http://localhost:3000/cadent-cable';
+// const SERVER_URL = 'http://10.13.106.132:3000/cadent-cable';
 const FLASH_MS   = 30;
 
 type GamePayload = {
-	kind: "tap";
+	kind: 'tap';
 };
 
 let conn: RelayConnection<GamePayload> | null = null;
-let roomId     = "";
-let ownerToken = "";
-let myPlayerId = "";
+let roomId     = '';
+let ownerToken = '';
+let myPlayerId = '';
 
 const players     = new Map<string, ViewPlayerInfo>();
 const flashTimers = new Map<string, number>();
@@ -24,28 +24,28 @@ const $ = <T extends HTMLElement>(id: string): T => {
 	return el as T;
 };
 
-const roomIdInput        = $<HTMLInputElement>("room-id");
-const displayNameInput   = $<HTMLInputElement>("display-name");
-const accessModeInput    = $<HTMLSelectElement>("access-mode");
-const approvalRatioInput = $<HTMLInputElement>("approval-ratio");
-const createButton       = $<HTMLButtonElement>("create-room");
-const joinButton         = $<HTMLButtonElement>("join-room");
-const tapButton          = $<HTMLButtonElement>("tap-button");
-const leaveButton        = $<HTMLButtonElement>("leave-room");
-const statusEl           = $<HTMLDivElement>("status");
-const playersEl          = $<HTMLDivElement>("players");
-const requestsEl         = $<HTMLDivElement>("requests");
+const roomIdInput        = $<HTMLInputElement>('room-id');
+const displayNameInput   = $<HTMLInputElement>('display-name');
+const accessModeInput    = $<HTMLSelectElement>('access-mode');
+const approvalRatioInput = $<HTMLInputElement>('approval-ratio');
+const createButton       = $<HTMLButtonElement>('create-room');
+const joinButton         = $<HTMLButtonElement>('join-room');
+const tapButton          = $<HTMLButtonElement>('tap-button');
+const leaveButton        = $<HTMLButtonElement>('leave-room');
+const statusEl           = $<HTMLDivElement>('status');
+const playersEl          = $<HTMLDivElement>('players');
+const requestsEl         = $<HTMLDivElement>('requests');
 
-createButton.addEventListener("click", async () => {
+createButton.addEventListener('click', async () => {
 	try {
-		setStatus("Creating room...");
+		setStatus('Creating room...');
 		const result = await createRoom(SERVER_URL, {
 			roomId       : roomIdInput.value.trim() || null,
-			accessMode   : accessModeInput.value === "approval" ? "approval" : "free",
+			accessMode   : accessModeInput.value === 'approval' ? 'approval' : 'free',
 			approvalRatio: Number(approvalRatioInput.value) || 0.5,
 		} satisfies CreateRoomOptions);
 		roomId            = result.roomId;
-		ownerToken      = result.ownerToken;
+		ownerToken        = result.ownerToken;
 		roomIdInput.value = roomId;
 
 		setStatus(`Room created: ${roomId}`);
@@ -55,46 +55,46 @@ createButton.addEventListener("click", async () => {
 	}
 });
 
-joinButton.addEventListener("click", async () => {
+joinButton.addEventListener('click', async () => {
 	try {
-		roomId       = roomIdInput.value.trim().toUpperCase();
-		ownerToken = "";
+		roomId     = roomIdInput.value.trim().toUpperCase();
+		ownerToken = '';
 		await connect({});
 	} catch (e) {
 		setStatus(errorMessage(e));
 	}
 });
 
-tapButton.addEventListener("pointerdown", () => {
-	conn?.sendData({ kind: "tap" });
+tapButton.addEventListener('pointerdown', () => {
+	conn?.sendData({ kind: 'tap' });
 });
 
-leaveButton.addEventListener("click", () => {
+leaveButton.addEventListener('click', () => {
 	conn?.disconnect();
 	conn = null;
-	myPlayerId = "";
+	myPlayerId = '';
 	players.clear();
 	setConnected(false);
 	renderPlayers();
-	setStatus("Disconnected.");
+	setStatus('Disconnected.');
 });
 
 async function connect(options: { ownerToken?: string }) {
 	const displayName = displayNameInput.value.trim();
-	if (!roomId) throw new Error("Room ID is empty.");
-	if (!displayName) throw new Error("Display name is empty.");
+	if (!roomId) throw new Error('Room ID is empty.');
+	if (!displayName) throw new Error('Display name is empty.');
 
 	conn?.disconnect();
 	players.clear();
 	renderPlayers();
 	setConnected(false);
-	setStatus("Connecting...");
+	setStatus('Connecting...');
 
 	conn = new RelayConnection<GamePayload>({
 		serverUrl     : SERVER_URL,
 		roomId,
 		displayName,
-		ownerToken  : options.ownerToken,
+		ownerToken    : options.ownerToken,
 		autoSync      : true,
 		syncIntervalMs: 3000,
 		onEvent       : handleRelayEvent,
@@ -104,70 +104,61 @@ async function connect(options: { ownerToken?: string }) {
 
 function handleRelayEvent(ev: RelayEvent<GamePayload>) {
 	switch (ev.type) {
-		case "open":
-			setStatus("Connected. Waiting for join result...");
+		case 'open':
+			setStatus('Connected. Waiting for join result...');
 			break;
-
-		case "joined":
+		case 'joined':
 			myPlayerId = ev.playerId as string;
 			setPlayers(ev.players as PlayerInfo[]);
 			setConnected(true);
 			setStatus(`Joined room ${ev.roomId} as ${ev.displayName}`);
 			break;
-
-		case "pending":
+		case 'pending':
 			setStatus(`Waiting for approval... (${ev.requiredApprovals} OK required)`);
 			break;
-
-		case "joinRequest":
-			showJoinRequest(ev.requestId as string, ev.displayName as string, ev.approvals as number, ev.requiredApprovals as number);
+		case 'joinRequest':
+			switch (ev.status) {
+				case 'created':
+					showJoinRequest(ev.requestId as string, ev.displayName as string, ev.approvals as number, ev.requiredApprovals as number);
+					break;
+				case 'updated':
+					updateJoinRequest(ev.requestId as string, ev.approvals as number, ev.requiredApprovals as number);
+					break;
+				case 'expired':
+				case 'canceled':
+					removeJoinRequest(ev.requestId as string);
+					break;
+			}
 			break;
-
-		case "joinRequestUpdated":
-			updateJoinRequest(ev.requestId as string, ev.approvals as number, ev.requiredApprovals as number);
-			break;
-
-		case "joinRequestExpired":
-		case "joinRequestCanceled":
-			removeJoinRequest(ev.requestId as string);
-			break;
-
-		case "joinRejected":
+		case 'joinRejected':
 			setStatus(`Join rejected: ${ev.reason}`);
 			setConnected(false);
 			break;
-
-		case "playerJoined":
+		case 'playerJoined':
 			setPlayers(ev.players as PlayerInfo[]);
 			break;
-
-		case "playerLeft":
+		case 'playerLeft':
 			players.delete(ev.playerId as string);
 			renderPlayers();
 			break;
-
-		case "heartbeat":
+		case 'heartbeat':
 			setPlayers(ev.players as PlayerInfo[]);
 			break;
-
-		case "tick":
+		case 'tick':
 			for (const msg of ev.messages as QueuedMessage<GamePayload>[]) {
 				if (!players.has(msg.from)) {
 					players.set(msg.from, { playerId: msg.from, displayName: msg.displayName });
 				}
-				if (msg.payload?.kind === "tap") flashPlayer(msg.from);
+				if (msg.payload?.kind === 'tap') flashPlayer(msg.from);
 			}
 			break;
-
-		case "syncUpdated":
+		case 'syncStatus':
 			// The sample game does not display sync values, but the generic client keeps them.
 			break;
-
-		case "error":
-			setStatus(`Error: ${ev.code ?? "unknown"} ${ev.message ?? ""}`.trim());
+		case 'error':
+			setStatus(`Error: ${ev.code ?? 'unknown'} ${ev.message ?? ''}`.trim());
 			break;
-
-		case "close":
+		case 'close':
 			setConnected(false);
 			setStatus(`Closed: ${ev.code} ${ev.reason}`.trim());
 			break;
@@ -181,18 +172,18 @@ function setPlayers(list: PlayerInfo[]) {
 }
 
 function renderPlayers() {
-	playersEl.textContent = "";
+	playersEl.textContent = '';
 	for (const p of players.values()) {
-		const row = document.createElement("div");
-		row.className = "player";
+		const row = document.createElement('div');
+		row.className = 'player';
 		row.dataset.playerId = p.playerId;
 
-		const lamp = document.createElement("span");
-		lamp.className = "lamp";
-		lamp.setAttribute("aria-hidden", "true");
+		const lamp = document.createElement('span');
+		lamp.className = 'lamp';
+		lamp.setAttribute('aria-hidden', 'true');
 
-		const name = document.createElement("span");
-		name.textContent = `${p.displayName}${p.playerId === myPlayerId ? " (you)" : ""}`;
+		const name = document.createElement('span');
+		name.textContent = `${p.displayName}${p.playerId === myPlayerId ? ' (you)' : ''}`;
 
 		row.append(lamp, name);
 		playersEl.append(row);
@@ -200,17 +191,17 @@ function renderPlayers() {
 }
 
 function flashPlayer(playerId: string) {
-	const row = playersEl.querySelector<HTMLElement>(`.player[data-player-id="${CSS.escape(playerId)}"]`);
+	const row = playersEl.querySelector<HTMLElement>(`.player[data-player-id='${CSS.escape(playerId)}']`);
 	if (row) {
-		row.classList.add("on");
+		row.classList.add('on');
 	}
 	const old = flashTimers.get(playerId);
 	if (old !== undefined) window.clearTimeout(old);
 
 	const timer = window.setTimeout(() => {
-		const current = playersEl.querySelector<HTMLElement>(`.player[data-player-id="${CSS.escape(playerId)}"]`);
+		const current = playersEl.querySelector<HTMLElement>(`.player[data-player-id='${CSS.escape(playerId)}']`);
 		if (current) {
-			current.classList.remove("on");
+			current.classList.remove('on');
 		}
 		flashTimers.delete(playerId);
 	}, FLASH_MS);
@@ -220,17 +211,17 @@ function flashPlayer(playerId: string) {
 function showJoinRequest(requestId: string, displayName: string, approvals: number, requiredApprovals: number) {
 	if (document.getElementById(`req-${requestId}`)) return;
 
-	const box = document.createElement("div");
-	box.className = "request";
+	const box = document.createElement('div');
+	box.className = 'request';
 	box.id = `req-${requestId}`;
 
-	const text = document.createElement("span");
+	const text = document.createElement('span');
 	text.textContent = `${displayName} wants to join. OK: ${approvals}/${requiredApprovals}`;
 
-	const button = document.createElement("button");
-	button.type = "button";
-	button.textContent = "OK";
-	button.addEventListener("click", () => {
+	const button = document.createElement('button');
+	button.type = 'button';
+	button.textContent = 'OK';
+	button.addEventListener('click', () => {
 		conn?.approve(requestId);
 		button.disabled = true;
 	});
@@ -242,8 +233,8 @@ function showJoinRequest(requestId: string, displayName: string, approvals: numb
 function updateJoinRequest(requestId: string, approvals: number, requiredApprovals: number) {
 	const box = document.getElementById(`req-${requestId}`);
 	if (!box) return;
-	const text = box.querySelector("span");
-	if (text) text.textContent = text.textContent?.replace(/OK: \d+\/\d+/, `OK: ${approvals}/${requiredApprovals}`) ?? "";
+	const text = box.querySelector('span');
+	if (text) text.textContent = text.textContent?.replace(/OK: \d+\/\d+/, `OK: ${approvals}/${requiredApprovals}`) ?? '';
 }
 
 function removeJoinRequest(requestId: string) {
@@ -264,4 +255,4 @@ function errorMessage(e: unknown): string {
 }
 
 setConnected(false);
-setStatus("Not connected.");
+setStatus('Not connected.');
