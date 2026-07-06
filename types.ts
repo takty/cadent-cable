@@ -8,8 +8,6 @@
 
 export type RoomMode = 'broadcast' | 'remote';
 
-export type AccessMode = 'free' | 'approval';
-
 export type ClientRole = 'player' | 'receiver' | 'controller';
 
 export type JoinRequestStatus = 'created' | 'updated' | 'expired' | 'canceled';
@@ -17,7 +15,6 @@ export type JoinRequestStatus = 'created' | 'updated' | 'expired' | 'canceled';
 export type CreateRoomOptions = {
 	roomId?       : string | null;
 	roomMode?     : RoomMode;
-	accessMode?   : AccessMode;
 	approvalRatio?: number;
 };
 
@@ -25,7 +22,6 @@ export type CreateRoomResult = {
 	ok           : true;
 	roomId       : string;
 	roomMode     : RoomMode;
-	accessMode   : AccessMode;
 	approvalRatio: number;
 	ownerToken   : string;
 	joinUrl?     : string;
@@ -49,7 +45,7 @@ export type RelayEvent<TPayload = unknown> = { type: 'open'; } |
 
 	// From server
 
-	{ type: 'joined';       serverTime: number; roomId: string; playerId: string; displayName: string; roomMode: RoomMode; accessMode: AccessMode; role: ClientRole; players: PlayerInfo[]; } |
+	{ type: 'joined';       serverTime: number; roomId: string; playerId: string; displayName: string; roomMode: RoomMode; role: ClientRole; players: PlayerInfo[]; } |
 	{ type: 'pending';      serverTime: number; roomId: string; requestId: string; displayName: string; requiredApprovals: number; timeoutMs: number; } |
 	{ type: 'joinRequest';  serverTime: number; roomId: string; requestId: string; displayName: string; requiredApprovals: number; status: JoinRequestStatus; approvals: number; expiresAt: number; reason?: string; } |
 	{ type: 'joinRejected'; serverTime: number; roomId: string; requestId: string; reason: string; } |

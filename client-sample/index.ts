@@ -26,7 +26,6 @@ const $ = <T extends HTMLElement>(id: string): T => {
 
 const roomIdInput        = $<HTMLInputElement>('room-id');
 const displayNameInput   = $<HTMLInputElement>('display-name');
-const accessModeInput    = $<HTMLSelectElement>('access-mode');
 const approvalRatioInput = $<HTMLInputElement>('approval-ratio');
 const createButton       = $<HTMLButtonElement>('create-room');
 const joinButton         = $<HTMLButtonElement>('join-room');
@@ -41,8 +40,7 @@ createButton.addEventListener('click', async () => {
 		setStatus('Creating room...');
 		const result = await createRoom(SERVER_URL, {
 			roomId       : roomIdInput.value.trim() || null,
-			accessMode   : accessModeInput.value === 'approval' ? 'approval' : 'free',
-			approvalRatio: Number(approvalRatioInput.value) || 0.5,
+			approvalRatio: Number(approvalRatioInput.value) || 0,
 		} satisfies CreateRoomOptions);
 		roomId            = result.roomId;
 		ownerToken        = result.ownerToken;

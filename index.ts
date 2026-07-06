@@ -27,7 +27,7 @@ import {
 	buildWebSocketUrl,
 } from './utils';
 import { getEnvBool, getEnvInt, getRouteName, getEndpointBaseUrl } from './utils-server';
-import type { RoomMode, AccessMode, ClientRole, JoinRequestStatus, CreateRoomOptions, CreateRoomResult, PlayerInfo, QueuedMessage, RelayEvent } from './types';
+import type { RoomMode, ClientRole, JoinRequestStatus, CreateRoomOptions, CreateRoomResult, PlayerInfo, QueuedMessage, RelayEvent } from './types';
 
 export type TimeoutHandle  = ReturnType<typeof setTimeout>;
 type IntervalHandle        = ReturnType<typeof setInterval>;
@@ -63,7 +63,6 @@ export type JoinRequest = {
 type Room = {
 	roomId        : string;
 	roomMode      : RoomMode;
-	accessMode    : AccessMode;
 	approvalRatio : number;
 	ownerToken    : string;
 	receiver?     : WS;
@@ -233,9 +232,8 @@ async function handleCreateRoom(req: Request): Promise<Response> {
 	} catch {
 		body = {};
 	}
-	const rMode: RoomMode   = body.roomMode   === 'remote'   ? 'remote'   : 'broadcast';
-	const aMode: AccessMode = body.accessMode === 'approval' ? 'approval' : 'free';
-	const ratio             = normalizeApprovalRatio(body.approvalRatio);
+	const rMode: RoomMode = body.roomMode   === 'remote'   ? 'remote'   : 'broadcast';
+	const ratio           = normalizeApprovalRatio(body.approvalRatio);
 
 	let roomId: string;
 	if (typeof body.roomId === 'string' && body.roomId.trim() !== '') {
@@ -251,19 +249,18 @@ async function handleCreateRoom(req: Request): Promise<Response> {
 	} else {
 		roomId = generateUniqueCode(ROOM_ID_LENGTH, ROOM_ID_CHARS, (id) => rooms.has(id));
 	}
-	const room = createRoom(roomId, rMode, aMode, ratio);
+	const room = createRoom(roomId, rMode, ratio);
 	const base = getEndpointBaseUrl(req.url);
 
 	return jsonResponse({
 		ok           : true,
 		roomId       : room.roomId,
 		roomMode     : room.roomMode,
-		accessMode   : room.accessMode,
 		approvalRatio: room.approvalRatio,
-		ownerToken : room.ownerToken,
+		ownerToken   : room.ownerToken,
 		joinUrl      : buildWebSocketUrl(base, 'ws', {
-			roomId      : room.roomId,
-			displayName : '...',
+			roomId     : room.roomId,
+			displayName: '...',
 		}, true),
 		ownerJoinUrl : buildWebSocketUrl(base, 'ws', {
 			roomId     : room.roomId,
@@ -289,7 +286,7 @@ function handleWebSocketUpgrade(req: Request, server: Server<WSData>, url: URL):
 
 	const isOwner           = ownerToken !== '' && ownerToken === room.ownerToken;
 	const role : ClientRole = room.roomMode === 'remote' ? (isOwner ? 'receiver' : 'controller') : 'player';
-	const state: ConnState  = isOwner || room.accessMode === 'free' ? 'active' : 'pending';
+	const state: ConnState  = isOwner || room.approvalRatio === 0 ? 'active' : 'pending';
 
 	const ok = server.upgrade(req, {
 		data: {
@@ -304,11 +301,10 @@ function handleWebSocketUpgrade(req: Request, server: Server<WSData>, url: URL):
 	return undefined;
 }
 
-function createRoom(roomId: string, roomMode: RoomMode, accessMode: AccessMode, approvalRatio: number): Room {
+function createRoom(roomId: string, roomMode: RoomMode, approvalRatio: number): Room {
 	const room: Room = {
 		roomId,
 		roomMode,
-		accessMode,
 		approvalRatio,
 		ownerToken    : createId('owner'),
 		active          : new Set(),
@@ -355,7 +351,6 @@ function activateConnection(room: Room, ws: WS): void {
 		playerId   : ws.data.playerId,
 		displayName: ws.data.displayName,
 		roomMode   : room.roomMode,
-		accessMode : room.accessMode,
 		role       : ws.data.role,
 		players,
 	} satisfies RelayEvent));

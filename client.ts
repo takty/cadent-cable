@@ -168,7 +168,6 @@ export async function createRoom(serverUrl: string, options: CreateRoomOptions =
 		body   : JSON.stringify({
 			roomId       : options.roomId ?? null,
 			roomMode     : options.roomMode ?? 'broadcast',
-			accessMode   : options.accessMode ?? 'free',
 			approvalRatio: normalizeApprovalRatio(options.approvalRatio),
 		} satisfies CreateRoomOptions),
 	});

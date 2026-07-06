@@ -79,8 +79,8 @@ export function validateDisplayName(dn: string, maxLen: number): string | null {
 // -----------------------------------------------------------------------------
 
 export function normalizeApprovalRatio(v: unknown): number {
-	if (typeof v !== 'number' || !Number.isFinite(v)) return 0.5;
-	return v <= 0 ? 0.5 : Math.min(v, 1);
+	if (typeof v !== 'number' || !Number.isFinite(v)) return 0;
+	return v < 0 ? 0 : Math.min(v, 1);
 }
 
 // -----------------------------------------------------------------------------
