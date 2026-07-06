@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Remote Receiver Sample</title>
+	<link rel="stylesheet" href="style.css">
+</head>
+<body class="receiver-page">
+	<h1>Remote Receiver Sample</h1>
+
+	<section class="panel">
+		<button id="create-room" type="button">Start receiver</button>
+		<button id="leave-room" type="button" disabled>Leave</button>
+		<div id="status" class="status"></div>
+	</section>
+
+	<section class="receiver-layout">
+		<div class="side-panel">
+			<h2>Controller URL</h2>
+			<div>Room ID: <code id="room-id">-</code></div>
+			<div>Controllers: <span id="controller-count">0</span></div>
+			<div id="qr" class="qr"></div>
+			<a id="controller-url" href="#" target="_blank" rel="noreferrer"></a>
+		</div>
+
+		<div id="play-area" class="play-area" aria-label="play area"></div>
+	</section>
+
+	<script src="./qrcode.min.js"></script>
+	<script type="module" src="./receiver.js"></script>
+</body>
+</html>

@@ -1,0 +1,190 @@
+* {
+	box-sizing: border-box;
+}
+
+body {
+	font-family: system-ui, sans-serif;
+	margin: 24px auto;
+	padding: 0 16px;
+	color: #222;
+}
+
+.receiver-page {
+	max-width: 1080px;
+}
+
+.controller-page {
+	max-width: 720px;
+	min-height: 100svh;
+	touch-action: none;
+	user-select: none;
+	-webkit-user-select: none;
+	-webkit-touch-callout: none;
+}
+
+h1 {
+	margin: 0 0 16px;
+}
+
+section {
+	margin: 16px 0;
+}
+
+button {
+	font: inherit;
+}
+
+.panel {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.panel button {
+	padding: 6px 12px;
+}
+
+.status {
+	flex-basis: 100%;
+	min-height: 1.5em;
+	padding: 8px;
+	border: 1px solid #ccc;
+	background: #fafafa;
+}
+
+.receiver-layout {
+	display: grid;
+	grid-template-columns: 240px 1fr;
+	gap: 16px;
+	align-items: start;
+}
+
+.side-panel {
+	padding: 12px;
+	border: 1px solid #ccc;
+	background: #fafafa;
+	overflow-wrap: anywhere;
+}
+
+.side-panel h2 {
+	margin: 0 0 12px;
+	font-size: 18px;
+}
+
+.qr {
+	width: 192px;
+	height: 192px;
+	margin: 12px 0;
+	background: #fff;
+}
+
+.play-area {
+	position: relative;
+	height: min(60vh, 520px);
+	min-height: 360px;
+	border: 2px solid #333;
+	background:
+		linear-gradient(#eee 1px, transparent 1px),
+		linear-gradient(90deg, #eee 1px, transparent 1px),
+		#fff;
+	background-size: 32px 32px;
+	overflow: hidden;
+}
+
+.character {
+	position: absolute;
+	width: 28px;
+	height: 28px;
+	border: 2px solid #222;
+	border-radius: 50%;
+	transform-origin: center;
+	will-change: left, top, transform;
+}
+
+.controller {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 36px;
+	align-items: center;
+	margin-top: 32px;
+}
+
+.dpad {
+	display: grid;
+	grid-template-columns: 88px 88px 88px;
+	grid-template-rows: 88px 88px 88px;
+	justify-content: center;
+}
+
+.dpad-up {
+	grid-column: 2;
+	grid-row: 1;
+}
+
+.dpad-left {
+	grid-column: 1;
+	grid-row: 2;
+}
+
+.dpad-right {
+	grid-column: 3;
+	grid-row: 2;
+}
+
+.dpad-down {
+	grid-column: 2;
+	grid-row: 3;
+}
+
+.action-buttons {
+	display: flex;
+	justify-content: center;
+	gap: 24px;
+}
+
+.control-button {
+	width: 84px;
+	height: 84px;
+	border: 2px solid #333;
+	border-radius: 14px;
+	background: #f8f8f8;
+	font-size: 30px;
+	font-weight: 700;
+	touch-action: none;
+}
+
+.action-button {
+	border-radius: 50%;
+}
+
+.control-button.pressed {
+	background: #333;
+	color: #fff;
+}
+
+.control-button:disabled {
+	opacity: 0.35;
+}
+
+@media (max-width: 760px) {
+	.receiver-layout {
+		grid-template-columns: 1fr;
+	}
+
+	.controller {
+		grid-template-columns: 1fr;
+		gap: 24px;
+	}
+
+	.dpad {
+		grid-template-columns: 76px 76px 76px;
+		grid-template-rows: 76px 76px 76px;
+	}
+
+	.control-button {
+		width: 72px;
+		height: 72px;
+		font-size: 26px;
+	}
+}

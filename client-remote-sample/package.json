@@ -1,0 +1,14 @@
+{
+	"name": "client-remote-sample",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "bun run build-client.mjs",
+		"serve": "bun run static-server.mjs",
+		"static": "bun run build-client.mjs"
+	},
+	"devDependencies": {
+		"@types/bun": "latest"
+	}
+}
