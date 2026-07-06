@@ -1,5 +1,5 @@
 import { createRoom, RelayConnection, type RelayConnectionOptions } from '../client';
-import { type CreateRoomOptions, type MemberInfo, type MemberViewInfo, type QueuedMessage } from '../types';
+import { type CreateRoomOptions, type MemberInfo, type QueuedMessage } from '../types';
 import { type RelayEvent } from '../types';
 
 const SERVER_URL = 'http://localhost:3000/cadent-cable';
@@ -15,7 +15,7 @@ let roomId     = '';
 let ownerToken = '';
 let myMemberId = '';
 
-const members     = new Map<string, MemberViewInfo>();
+const members     = new Map<string, MemberInfo>();
 const flashTimers = new Map<string, number>();
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -145,7 +145,7 @@ function handleRelayEvent(ev: RelayEvent<GamePayload>) {
 		case 'tick':
 			for (const msg of ev.messages as QueuedMessage<GamePayload>[]) {
 				if (!members.has(msg.from)) {
-					members.set(msg.from, { memberId: msg.from, displayName: msg.displayName });
+					members.set(msg.from, { memberId: msg.from, displayName: msg.displayName, role: 'member' });
 				}
 				if (msg.payload?.kind === 'tap') flashMember(msg.from);
 			}

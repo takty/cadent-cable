@@ -72,9 +72,3 @@ export type MemberInfo = {
 	displayName: string;
 	role       : MemberRole;
 };
-
-export type MemberViewInfo = {
-	memberId   : string;
-	displayName: string;
-	role?      : MemberInfo['role'];
-};
