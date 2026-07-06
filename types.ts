@@ -8,7 +8,7 @@
 
 export type RoomMode = 'broadcast' | 'remote';
 
-export type ClientRole = 'player' | 'receiver' | 'controller';
+export type MemberRole = 'member' | 'receiver' | 'controller';
 
 export type JoinRequestStatus = 'created' | 'updated' | 'expired' | 'canceled';
 
@@ -45,14 +45,14 @@ export type RelayEvent<TPayload = unknown> = { type: 'open'; } |
 
 	// From server
 
-	{ type: 'joined';       serverTime: number; roomId: string; playerId: string; displayName: string; roomMode: RoomMode; role: ClientRole; players: PlayerInfo[]; } |
+	{ type: 'joined';       serverTime: number; roomId: string; memberId: string; displayName: string; roomMode: RoomMode; role: MemberRole; members: MemberInfo[]; } |
 	{ type: 'pending';      serverTime: number; roomId: string; requestId: string; displayName: string; requiredApprovals: number; timeoutMs: number; } |
 	{ type: 'joinRequest';  serverTime: number; roomId: string; requestId: string; displayName: string; requiredApprovals: number; status: JoinRequestStatus; approvals: number; expiresAt: number; reason?: string; } |
 	{ type: 'joinRejected'; serverTime: number; roomId: string; requestId: string; reason: string; } |
-	{ type: 'playerJoined'; serverTime: number; roomId: string; playerId: string; displayName: string; players: PlayerInfo[]; } |
-	{ type: 'playerLeft';   serverTime: number; roomId: string; playerId: string; displayName: string; } |
+	{ type: 'memberJoined'; serverTime: number; roomId: string; memberId: string; displayName: string; members: MemberInfo[]; } |
+	{ type: 'memberLeft';   serverTime: number; roomId: string; memberId: string; displayName: string; } |
 	{ type: 'tick';         serverTime: number; roomId: string; tickSeq: number; messages: QueuedMessage<TPayload>[]; } |
-	{ type: 'heartbeat';    serverTime: number; roomId: string; tickSeq: number; players: PlayerInfo[]; } |
+	{ type: 'heartbeat';    serverTime: number; roomId: string; tickSeq: number; members: MemberInfo[]; } |
 	{ type: 'roomClosed';   serverTime: number; roomId: string; reason: string; } |
 
 	{ type: 'syncResponse', clientSendTime: number; serverRecvTime: number; serverSendTime: number; } |
@@ -67,14 +67,14 @@ export type QueuedMessage<TPayload = unknown> = {
 	payload    : TPayload;
 };
 
-export type PlayerInfo = {
-	playerId   : string;
+export type MemberInfo = {
+	memberId   : string;
 	displayName: string;
-	role       : ClientRole;
+	role       : MemberRole;
 };
 
-export type ViewPlayerInfo = {
-	playerId   : string;
+export type MemberViewInfo = {
+	memberId   : string;
 	displayName: string;
-	role?      : PlayerInfo['role'];
+	role?      : MemberInfo['role'];
 };

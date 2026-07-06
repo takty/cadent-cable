@@ -1,5 +1,5 @@
 import { createRoom, RelayConnection, type RelayConnectionOptions } from '../client';
-import { type CreateRoomOptions, type PlayerInfo, type ViewPlayerInfo, type QueuedMessage } from '../types';
+import { type CreateRoomOptions, type MemberInfo, type MemberViewInfo, type QueuedMessage } from '../types';
 import { type RelayEvent } from '../types';
 
 const SERVER_URL = 'http://localhost:3000/cadent-cable';
@@ -13,9 +13,9 @@ type GamePayload = {
 let conn: RelayConnection<GamePayload> | null = null;
 let roomId     = '';
 let ownerToken = '';
-let myPlayerId = '';
+let myMemberId = '';
 
-const players     = new Map<string, ViewPlayerInfo>();
+const members     = new Map<string, MemberViewInfo>();
 const flashTimers = new Map<string, number>();
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -32,7 +32,7 @@ const joinButton         = $<HTMLButtonElement>('join-room');
 const tapButton          = $<HTMLButtonElement>('tap-button');
 const leaveButton        = $<HTMLButtonElement>('leave-room');
 const statusEl           = $<HTMLDivElement>('status');
-const playersEl          = $<HTMLDivElement>('players');
+const membersEl          = $<HTMLDivElement>('members');
 const requestsEl         = $<HTMLDivElement>('requests');
 
 createButton.addEventListener('click', async () => {
@@ -70,10 +70,10 @@ tapButton.addEventListener('pointerdown', () => {
 leaveButton.addEventListener('click', () => {
 	conn?.disconnect();
 	conn = null;
-	myPlayerId = '';
-	players.clear();
+	myMemberId = '';
+	members.clear();
 	setConnected(false);
-	renderPlayers();
+	renderMembers();
 	setStatus('Disconnected.');
 });
 
@@ -83,8 +83,8 @@ async function connect(options: { ownerToken?: string }) {
 	if (!displayName) throw new Error('Display name is empty.');
 
 	conn?.disconnect();
-	players.clear();
-	renderPlayers();
+	members.clear();
+	renderMembers();
 	setConnected(false);
 	setStatus('Connecting...');
 
@@ -106,8 +106,8 @@ function handleRelayEvent(ev: RelayEvent<GamePayload>) {
 			setStatus('Connected. Waiting for join result...');
 			break;
 		case 'joined':
-			myPlayerId = ev.playerId as string;
-			setPlayers(ev.players as PlayerInfo[]);
+			myMemberId = ev.memberId as string;
+			setMembers(ev.members as MemberInfo[]);
 			setConnected(true);
 			setStatus(`Joined room ${ev.roomId} as ${ev.displayName}`);
 			break;
@@ -132,22 +132,22 @@ function handleRelayEvent(ev: RelayEvent<GamePayload>) {
 			setStatus(`Join rejected: ${ev.reason}`);
 			setConnected(false);
 			break;
-		case 'playerJoined':
-			setPlayers(ev.players as PlayerInfo[]);
+		case 'memberJoined':
+			setMembers(ev.members as MemberInfo[]);
 			break;
-		case 'playerLeft':
-			players.delete(ev.playerId as string);
-			renderPlayers();
+		case 'memberLeft':
+			members.delete(ev.memberId as string);
+			renderMembers();
 			break;
 		case 'heartbeat':
-			setPlayers(ev.players as PlayerInfo[]);
+			setMembers(ev.members as MemberInfo[]);
 			break;
 		case 'tick':
 			for (const msg of ev.messages as QueuedMessage<GamePayload>[]) {
-				if (!players.has(msg.from)) {
-					players.set(msg.from, { playerId: msg.from, displayName: msg.displayName });
+				if (!members.has(msg.from)) {
+					members.set(msg.from, { memberId: msg.from, displayName: msg.displayName });
 				}
-				if (msg.payload?.kind === 'tap') flashPlayer(msg.from);
+				if (msg.payload?.kind === 'tap') flashMember(msg.from);
 			}
 			break;
 		case 'syncStatus':
@@ -163,47 +163,47 @@ function handleRelayEvent(ev: RelayEvent<GamePayload>) {
 	}
 }
 
-function setPlayers(list: PlayerInfo[]) {
-	players.clear();
-	for (const p of list) players.set(p.playerId, p);
-	renderPlayers();
+function setMembers(list: MemberInfo[]) {
+	members.clear();
+	for (const p of list) members.set(p.memberId, p);
+	renderMembers();
 }
 
-function renderPlayers() {
-	playersEl.textContent = '';
-	for (const p of players.values()) {
+function renderMembers() {
+	membersEl.textContent = '';
+	for (const p of members.values()) {
 		const row = document.createElement('div');
-		row.className = 'player';
-		row.dataset.playerId = p.playerId;
+		row.className = 'member';
+		row.dataset.memberId = p.memberId;
 
 		const lamp = document.createElement('span');
 		lamp.className = 'lamp';
 		lamp.setAttribute('aria-hidden', 'true');
 
 		const name = document.createElement('span');
-		name.textContent = `${p.displayName}${p.playerId === myPlayerId ? ' (you)' : ''}`;
+		name.textContent = `${p.displayName}${p.memberId === myMemberId ? ' (you)' : ''}`;
 
 		row.append(lamp, name);
-		playersEl.append(row);
+		membersEl.append(row);
 	}
 }
 
-function flashPlayer(playerId: string) {
-	const row = playersEl.querySelector<HTMLElement>(`.player[data-player-id='${CSS.escape(playerId)}']`);
+function flashMember(memberId: string) {
+	const row = membersEl.querySelector<HTMLElement>(`.member[data-member-id='${CSS.escape(memberId)}']`);
 	if (row) {
 		row.classList.add('on');
 	}
-	const old = flashTimers.get(playerId);
+	const old = flashTimers.get(memberId);
 	if (old !== undefined) window.clearTimeout(old);
 
 	const timer = window.setTimeout(() => {
-		const current = playersEl.querySelector<HTMLElement>(`.player[data-player-id='${CSS.escape(playerId)}']`);
+		const current = membersEl.querySelector<HTMLElement>(`.member[data-member-id='${CSS.escape(memberId)}']`);
 		if (current) {
 			current.classList.remove('on');
 		}
-		flashTimers.delete(playerId);
+		flashTimers.delete(memberId);
 	}, FLASH_MS);
-	flashTimers.set(playerId, timer);
+	flashTimers.set(memberId, timer);
 }
 
 function showJoinRequest(requestId: string, displayName: string, approvals: number, requiredApprovals: number) {

@@ -27,7 +27,7 @@ import {
 	buildWebSocketUrl,
 } from './utils';
 import { getEnvBool, getEnvInt, getRouteName, getEndpointBaseUrl } from './utils-server';
-import type { RoomMode, ClientRole, JoinRequestStatus, CreateRoomOptions, CreateRoomResult, PlayerInfo, QueuedMessage, RelayEvent } from './types';
+import type { RoomMode, MemberRole, JoinRequestStatus, CreateRoomOptions, CreateRoomResult, MemberInfo, QueuedMessage, RelayEvent } from './types';
 
 export type TimeoutHandle  = ReturnType<typeof setTimeout>;
 type IntervalHandle        = ReturnType<typeof setInterval>;
@@ -36,11 +36,11 @@ type ConnState = 'active' | 'pending';
 
 type WSData = {
 	connectionId       : string;
-	playerId?          : string;
+	memberId?          : string;
 	roomId             : string;
 	displayName        : string;
 	state              : ConnState;
-	role               : ClientRole;
+	role               : MemberRole;
 	requestId?         : string;
 	offsetToServerTime?: number;
 	rtt?               : number;
@@ -184,10 +184,10 @@ function close(ws: ServerWebSocket<WSData>) {
 				}
 			} else {
 				sendToReceiver(room, {
-					type       : 'playerLeft',
+					type       : 'memberLeft',
 					serverTime : performance.now(),
 					roomId     : room.roomId,
-					playerId   : ws.data.playerId as string,
+					memberId   : ws.data.memberId as string,
 					displayName: ws.data.displayName,
 				} satisfies RelayEvent);
 			}
@@ -196,10 +196,10 @@ function close(ws: ServerWebSocket<WSData>) {
 		}
 
 		sendToRoom(room, {
-			type       : 'playerLeft',
+			type       : 'memberLeft',
 			serverTime : performance.now(),
 			roomId     : room.roomId,
-			playerId   : ws.data.playerId as string,
+			memberId   : ws.data.memberId as string,
 			displayName: ws.data.displayName,
 		} satisfies RelayEvent);
 		maybeScheduleEmptyRoomDeletion(room);
@@ -284,9 +284,9 @@ function handleWebSocketUpgrade(req: Request, server: Server<WSData>, url: URL):
 	const displayNameError = validateDisplayName(displayName, DISPLAY_NAME_MAX_LENGTH);
 	if (displayNameError) return jsonResponse({ ok: false, error: displayNameError }, CORS_HEADERS, 400);
 
-	const isOwner           = ownerToken !== '' && ownerToken === room.ownerToken;
-	const role : ClientRole = room.roomMode === 'remote' ? (isOwner ? 'receiver' : 'controller') : 'player';
-	const state: ConnState  = isOwner || room.approvalRatio === 0 ? 'active' : 'pending';
+	const isOwner               = ownerToken !== '' && ownerToken === room.ownerToken;
+	const role : MemberRole = room.roomMode === 'remote' ? (isOwner ? 'receiver' : 'controller') : 'member';
+	const state: ConnState      = isOwner || room.approvalRatio === 0 ? 'active' : 'pending';
 
 	const ok = server.upgrade(req, {
 		data: {
@@ -327,7 +327,7 @@ function activateConnection(room: Room, ws: WS): void {
 	clearEmptyRoomDeletion(room);
 
 	ws.data.state     = 'active';
-	ws.data.playerId  = createId('p');
+	ws.data.memberId  = createId('p');
 	ws.data.requestId = undefined;
 
 	if (room.roomMode === 'remote' && ws.data.role === 'receiver') {
@@ -342,28 +342,28 @@ function activateConnection(room: Room, ws: WS): void {
 	}
 
 	room.active.add(ws);
-	const players = room.roomMode === 'remote' && ws.data.role === 'controller' ? [] : getPlayers(room);
+	const members = room.roomMode === 'remote' && ws.data.role === 'controller' ? [] : getMembers(room);
 
 	ws.send(JSON.stringify({
 		type       : 'joined',
 		serverTime : performance.now(),
 		roomId     : room.roomId,
-		playerId   : ws.data.playerId,
-		displayName: ws.data.displayName,
 		roomMode   : room.roomMode,
+		memberId   : ws.data.memberId,
+		displayName: ws.data.displayName,
 		role       : ws.data.role,
-		players,
+		members,
 	} satisfies RelayEvent));
 
 	if (room.roomMode === 'remote') {
 		if (ws.data.role === 'controller') {
 			sendToReceiver(room, {
-				type       : 'playerJoined',
-				roomId     : room.roomId,
-				playerId   : ws.data.playerId,
-				displayName: ws.data.displayName,
+				type       : 'memberJoined',
 				serverTime : performance.now(),
-				players    : players,
+				roomId     : room.roomId,
+				memberId   : ws.data.memberId,
+				displayName: ws.data.displayName,
+				members,
 			} satisfies RelayEvent);
 		}
 
@@ -376,12 +376,12 @@ function activateConnection(room: Room, ws: WS): void {
 	}
 
 	sendToRoom(room, {
-		type       : 'playerJoined',
-		roomId     : room.roomId,
-		playerId   : ws.data.playerId,
-		displayName: ws.data.displayName,
+		type       : 'memberJoined',
 		serverTime : performance.now(),
-		players,
+		roomId     : room.roomId,
+		memberId   : ws.data.memberId,
+		displayName: ws.data.displayName,
+		members,
 	} satisfies RelayEvent);
 
 	for (const req of room.pending.values()) {
@@ -442,8 +442,8 @@ function joinRequestMessage(room: Room, req: JoinRequest, status: JoinRequestSta
 }
 
 function handleApproval(ws: WS, msg: any): void {
-	if (ws.data.state !== 'active' || !ws.data.playerId) {
-		sendError(ws, 'not_active', 'Only active players can approve join requests.');
+	if (ws.data.state !== 'active' || !ws.data.memberId) {
+		sendError(ws, 'not_active', 'Only active members can approve join requests.');
 		return;
 	}
 	const room = rooms.get(ws.data.roomId);
@@ -463,7 +463,7 @@ function handleApproval(ws: WS, msg: any): void {
 		sendError(ws, 'join_request_not_found', 'Join request not found.');
 		return;
 	}
-	req.approvals.add(ws.data.playerId);
+	req.approvals.add(ws.data.memberId);
 
 	dispatchEvent(room, joinRequestMessage(room, req, 'updated'));
 
@@ -503,8 +503,8 @@ function rejectJoinRequest(room: Room, requestId: string, reason: string): void 
 // -----------------------------------------------------------------------------
 
 function handleDataMessage(ws: WS, msg: any): void {
-	if (ws.data.state !== 'active' || !ws.data.playerId) {
-		sendError(ws, 'not_active', 'Only active players can send game data.');
+	if (ws.data.state !== 'active' || !ws.data.memberId) {
+		sendError(ws, 'not_active', 'Only active members can send game data.');
 		return;
 	}
 	const room = rooms.get(ws.data.roomId);
@@ -533,7 +533,7 @@ function handleDataMessage(ws: WS, msg: any): void {
 		receivedAt + EVENT_TIME_MAX_FUTURE_MS
 	);
 	room.queue.push({
-		from       : ws.data.playerId,
+		from       : ws.data.memberId,
 		displayName: ws.data.displayName,
 		clientTime,
 		eventTime,
@@ -584,7 +584,7 @@ function sendHeartbeat(room: Room): void {
 		serverTime: t,
 		roomId    : room.roomId,
 		tickSeq   : room.tickSeq,
-		players   : getPlayers(room),
+		members   : getMembers(room),
 	} satisfies RelayEvent);
 }
 
@@ -712,10 +712,10 @@ function send(ws: WS, ev: RelayEvent): void {
 
 // -----------------------------------------------------------------------------
 
-function getPlayers(room: Room) {
+function getMembers(room: Room) {
 	return [...room.active].map((ws) => ({
-		playerId   : ws.data.playerId as string,
+		memberId   : ws.data.memberId as string,
 		displayName: ws.data.displayName,
 		role       : ws.data.role,
-	} satisfies PlayerInfo));
+	} satisfies MemberInfo));
 }

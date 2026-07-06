@@ -35,7 +35,7 @@ export class RelayConnection<TPayload = unknown> {
 	readonly displayName: string;
 	readonly ownerToken?: string;
 
-	playerId          : string | null = null;
+	memberId          : string | null = null;
 	rtt               : number | null = null;
 	offsetToServerTime: number | null = null;
 
@@ -137,7 +137,7 @@ export class RelayConnection<TPayload = unknown> {
 			return;
 		}
 		if (msg.type === 'joined') {
-			this.playerId = msg.playerId as string;
+			this.memberId = msg.memberId as string;
 		}
 		if (msg.type === 'syncResponse') {
 			this.#send({
