@@ -1,0 +1,44 @@
+body {
+	font-family: system-ui, sans-serif;
+	max-width: 720px;
+	margin: 24px auto;
+	padding: 0 16px;
+}
+section {
+	margin: 16px 0;
+}
+label {
+	display: block;
+	margin: 8px 0;
+}
+input, select, button {
+	font: inherit;
+	padding: 6px 8px;
+	margin: 2px;
+}
+#tap-button {
+	width: 160px;
+	height: 80px;
+	font-size: 24px;
+}
+#status {
+	padding: 8px;
+	border: 1px solid #ccc;
+	min-height: 1.5em;
+}
+.member, .request {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 0;
+}
+.lamp {
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	border: 1px solid #999;
+	display: inline-block;
+}
+.member.on .lamp {
+	background: red;
+}

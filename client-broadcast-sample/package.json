@@ -6,7 +6,7 @@
 	"scripts": {
 		"build": "bun run build-client.mjs",
 		"serve": "bun run static-server.mjs",
-		"static": "bun build --compile --target=browser ./index.html --outdir=dist"
+		"static": "bun run build-client.mjs"
 	},
 	"devDependencies": {
 		"@types/bun": "latest"
