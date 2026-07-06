@@ -344,7 +344,7 @@ function activateConnection(room: Room, ws: WS): void {
 	room.active.add(ws);
 	const members = room.roomMode === 'remote' && ws.data.role === 'controller' ? [] : getMembers(room);
 
-	ws.send(JSON.stringify({
+	send(ws, {
 		type       : 'joined',
 		serverTime : performance.now(),
 		roomId     : room.roomId,
@@ -353,7 +353,7 @@ function activateConnection(room: Room, ws: WS): void {
 		displayName: ws.data.displayName,
 		role       : ws.data.role,
 		members,
-	} satisfies RelayEvent));
+	} satisfies RelayEvent);
 
 	if (room.roomMode === 'remote') {
 		if (ws.data.role === 'controller') {
@@ -366,10 +366,9 @@ function activateConnection(room: Room, ws: WS): void {
 				members,
 			} satisfies RelayEvent);
 		}
-
 		if (ws.data.role === 'receiver') {
 			for (const req of room.pending.values()) {
-				ws.send(JSON.stringify(joinRequestMessage(room, req, 'created')));
+				send(ws, joinRequestMessage(room, req, 'created'));
 			}
 		}
 		return;
@@ -385,7 +384,7 @@ function activateConnection(room: Room, ws: WS): void {
 	} satisfies RelayEvent);
 
 	for (const req of room.pending.values()) {
-		ws.send(JSON.stringify(joinRequestMessage(room, req, 'created')));
+		send(ws, joinRequestMessage(room, req, 'created'));
 	}
 }
 
@@ -413,7 +412,7 @@ function createJoinRequest(room: Room, ws: WS): void {
 	};
 	room.pending.set(requestId, req);
 
-	ws.send(JSON.stringify({
+	send(ws, {
 		type       : 'pending',
 		serverTime : performance.now(),
 		roomId     : room.roomId,
@@ -421,7 +420,7 @@ function createJoinRequest(room: Room, ws: WS): void {
 		displayName: ws.data.displayName,
 		requiredApprovals,
 		timeoutMs  : JOIN_REQUEST_TIMEOUT_MS,
-	} satisfies RelayEvent));
+	} satisfies RelayEvent);
 
 	dispatchEvent(room, joinRequestMessage(room, req, 'created'));
 }
@@ -488,13 +487,13 @@ function rejectJoinRequest(room: Room, requestId: string, reason: string): void 
 	clearTimeout(req.timer);
 	room.pending.delete(requestId);
 
-	req.ws.send(JSON.stringify({
+	send(req.ws, {
 		type      : 'joinRejected',
 		serverTime: performance.now(),
 		roomId    : room.roomId,
 		requestId,
 		reason,
-	} satisfies RelayEvent));
+	} satisfies RelayEvent);
 	req.ws.close(1008, `join_rejected:${reason}`);
 
 	dispatchEvent(room, joinRequestMessage(room, req, 'expired', reason));
@@ -599,7 +598,7 @@ function handleSync(ws: WS, msg: any): void {
 	const serverRecvTime = performance.now();
 	const serverSendTime = performance.now();
 
-	ws.send(JSON.stringify({ type: 'syncResponse', clientSendTime, serverRecvTime, serverSendTime } satisfies RelayEvent));
+	send(ws, { type: 'syncResponse', clientSendTime, serverRecvTime, serverSendTime } satisfies RelayEvent);
 }
 
 function handleSyncResult(ws: WS, msg: any): void {
@@ -623,12 +622,12 @@ function handleSyncResult(ws: WS, msg: any): void {
 		ws.data.rtt                = rtt;
 		ws.data.offsetToServerTime = offset;
 	}
-	ws.send(JSON.stringify({
+	send(ws, {
 		type              : 'syncStatus',
 		serverTime        : performance.now(),
 		rtt               : ws.data.rtt,
 		offsetToServerTime: ws.data.offsetToServerTime as number,
-	} satisfies RelayEvent));
+	} satisfies RelayEvent);
 }
 
 // -----------------------------------------------------------------------------
@@ -660,12 +659,12 @@ function deleteRoom(roomId: string, reason: string): void {
 
 	for (const req of room.pending.values()) {
 		clearTimeout(req.timer);
-		req.ws.send(JSON.stringify({
+		send(req.ws, {
 			type      : 'roomClosed',
 			serverTime: performance.now(),
 			roomId,
 			reason,
-		} satisfies RelayEvent));
+		} satisfies RelayEvent);
 		req.ws.close(1001, 'room_closed');
 	}
 	sendToRoom(room, {
