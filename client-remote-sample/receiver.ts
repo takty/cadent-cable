@@ -180,7 +180,7 @@ function handleRelayEvent(ev: RelayEvent<RemotePayload>) {
 
 function handleTick(messages: QueuedMessage<RemotePayload>[]) {
 	for (const msg of messages) {
-		const payload = msg.payload;
+		const payload = msg?.payload;
 		if (!isRemotePayload(payload)) continue;
 
 		const c = characters.get(msg.from) ?? createCharacter(msg.from);
