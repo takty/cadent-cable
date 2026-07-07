@@ -120,10 +120,10 @@ function stopReceiver() {
 	createButton.disabled = false;
 	leaveButton.disabled  = true;
 
-	roomIdEl.textContent = '-';
+	roomIdEl.textContent        = '-';
+	qrEl.textContent            = '';
 	controllerUrlEl.textContent = '';
 	controllerUrlEl.removeAttribute('href');
-	qrEl.textContent = '';
 
 	for (const c of characters.values()) {
 		c.el.remove();
@@ -168,6 +168,7 @@ function handleRelayEvent(ev: RelayEvent<RemotePayload>) {
 			setStatus(`Error: ${ev.code ?? 'unknown'} ${ev.message ?? ''}`.trim());
 			break;
 		case EVENT_TYPE.close:
+			stopReceiver();
 			createButton.disabled = false;
 			leaveButton.disabled  = true;
 			setStatus(`Closed: ${ev.code} ${ev.reason}`.trim());
