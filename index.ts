@@ -345,6 +345,7 @@ function createRoom(roomId: string, roomMode: RoomMode, approvalRatio: number): 
 	room.heartbeatTimer = setInterval(() => sendHeartbeat(room), HEARTBEAT_INTERVAL_MS);
 
 	rooms.set(roomId, room);
+	maybeScheduleEmptyRoomDeletion(room);
 	return room;
 }
 
@@ -547,6 +548,10 @@ function handleDataMessage(ws: WS, msg: any): void {
 			return;
 		}
 	}
+	if (!Object.hasOwn(msg, 'payload')) {
+		sendError(ws, 'invalid_data_message', 'data requires payload.');
+		return;
+	}
 	const receivedAt = performance.now();
 	const clientTime = typeof msg.clientTime === 'number' && Number.isFinite(msg.clientTime)
 		? msg.clientTime
@@ -617,7 +622,7 @@ function sendHeartbeat(room: Room): void {
 // -----------------------------------------------------------------------------
 
 function handleSync(ws: WS, msg: any): void {
-	const clientSendTime = Number(msg.clientSendTime);
+	const clientSendTime = typeof msg.clientSendTime === 'number' ? msg.clientSendTime : Number.NaN;
 	if (!Number.isFinite(clientSendTime)) {
 		sendError(ws, 'invalid_sync_request', 'syncRequest requires clientSendTime:number.');
 		return;
@@ -629,10 +634,10 @@ function handleSync(ws: WS, msg: any): void {
 }
 
 function handleSyncResult(ws: WS, msg: any): void {
-	const clientSendTime = Number(msg.clientSendTime);
-	const clientRecvTime = Number(msg.clientRecvTime);
-	const serverRecvTime = Number(msg.serverRecvTime);
-	const serverSendTime = Number(msg.serverSendTime);
+	const clientSendTime = typeof msg.clientSendTime === 'number' ? msg.clientSendTime : Number.NaN;
+	const clientRecvTime = typeof msg.clientRecvTime === 'number' ? msg.clientRecvTime : Number.NaN;
+	const serverRecvTime = typeof msg.serverRecvTime === 'number' ? msg.serverRecvTime : Number.NaN;
+	const serverSendTime = typeof msg.serverSendTime === 'number' ? msg.serverSendTime : Number.NaN;
 
 	if (![clientSendTime, clientRecvTime, serverRecvTime, serverSendTime].every(Number.isFinite)) {
 		sendError(ws, 'invalid_sync_report', 'syncReport has invalid timestamp fields.');
