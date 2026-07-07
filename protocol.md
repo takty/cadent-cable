@@ -10,6 +10,8 @@ Cadent Cable is a room-based WebSocket relay system. A client creates or joins a
 
 A room is an isolated communication group identified by `roomId`.
 
+A room is not closed simply because a receiver disconnects. A room may be closed when it becomes empty and the server's empty-room timeout expires, or when the server explicitly closes it for another reason.
+
 ### Member
 
 A member is one active WebSocket connection in a room.
@@ -19,6 +21,8 @@ Each active member has:
 * `memberId`
 * `displayName`
 * `role`
+
+A reconnecting client is treated as a new WebSocket connection and receives a new `memberId`.
 
 ### Room mode
 
@@ -44,7 +48,10 @@ In `remote` mode:
 * A client that joins with the correct `ownerToken` becomes `receiver`.
 * Other clients become `controller`.
 * At most one receiver is active at a time.
-* If a new receiver connects, the previous receiver is closed.
+* If a new receiver connects while another receiver is active, the previous receiver is closed.
+* If the receiver disconnects, the room remains open while other active members remain.
+* The receiver can reconnect later by using the same `ownerToken`.
+* Controllers remain connected while no receiver is active.
 
 ### Join request status
 
@@ -59,11 +66,31 @@ In `remote` mode:
 
 All time values are numbers in milliseconds.
 
-The protocol uses monotonic clocks, not Unix timestamps.
+The protocol uses monotonic clocks, not Unix timestamps. Time values are meaningful only for comparing elapsed time or ordering events within the same clock domain.
 
-Client-side time values, such as `clientTime` and `clientSendTime`, are based on the client's monotonic clock.
+Client-side time values are based on the client's monotonic clock.
 
-Server-side time values, such as `serverTime`, `serverRecvTime`, `serverSendTime`, `eventTime`, and `receivedAt`, are based on the server's monotonic clock.
+| Field            | Meaning                                                   |
+| ---------------- | --------------------------------------------------------- |
+| `clientTime`     | Client monotonic time when application data was produced. |
+| `clientSendTime` | Client monotonic time when a sync request was sent.       |
+| `clientRecvTime` | Client monotonic time when a sync response was received.  |
+
+Server-side time values are based on the server's monotonic clock.
+
+| Field            | Meaning                                                                    |
+| ---------------- | -------------------------------------------------------------------------- |
+| `serverTime`     | Server monotonic time when a server event was generated.                   |
+| `serverRecvTime` | Server monotonic time when a sync request was received.                    |
+| `serverSendTime` | Server monotonic time when a sync response was sent.                       |
+| `receivedAt`     | Server monotonic time when a `data` message was received.                  |
+| `eventTime`      | Estimated server-side event time for a `data` message.                    |
+| `expiresAt`      | Server monotonic time when a pending join request expires.                 |
+| `now`            | Server monotonic time returned by the health endpoint.                     |
+
+For a `data` message, the server computes `eventTime` from `clientTime` and the current estimated `offsetToServerTime` for that connection. If no usable client time estimate is available, the server uses `receivedAt` as `eventTime`.
+
+`offsetToServerTime` is the estimated value to add to a client-side monotonic time to convert it into the server's monotonic time domain.
 
 ## HTTP endpoints
 
@@ -176,6 +203,14 @@ The server accepts only text messages containing JSON objects.
 
 Binary WebSocket messages are rejected with an `error` event.
 
+### Local client wrapper events
+
+`open` and `close` are local events emitted by the TypeScript client wrapper.
+
+They are not JSON messages sent over the WebSocket connection.
+
+Other implementations, such as Unity C# or Python clients, may represent these as local callback events rather than protocol message types.
+
 ## Client to server messages
 
 ### `data`
@@ -195,8 +230,10 @@ Sends application payload data.
 | Field        | Type           | Required | Meaning                                |
 | ------------ | -------------- | -------- | -------------------------------------- |
 | `type`       | `"data"`       | Yes      | Message type.                          |
-| `clientTime` | `number`       | Yes      | Client monotonic time in milliseconds. |
+| `clientTime` | `number`       | No       | Client monotonic time in milliseconds. If omitted, the server uses its receive time as the event time. |
 | `payload`    | any JSON value | Yes      | Application-defined payload.           |
+
+If `clientTime` is present and a valid clock offset is available, the server estimates `eventTime` in server monotonic time from `clientTime`; otherwise, `receivedAt` is used as `eventTime`.
 
 In `broadcast` mode, data from active members is relayed to the room.
 
@@ -300,6 +337,8 @@ Sent when a connection becomes active.
 
 In `remote` mode, a controller receives an empty `members` array in `joined`.
 
+In `remote` mode, a receiver receives the current active member list in `joined`. This list includes the receiver itself and any controllers that are already connected. Therefore, when a receiver reconnects, it receives the current controller state at the time it becomes active.
+
 ### `pending`
 
 Sent to a joining client when approval is required.
@@ -354,6 +393,8 @@ Sent to a pending client when its join request is rejected.
 ```
 
 After this message, the server closes the WebSocket connection.
+
+A remote room is not closed simply because the receiver disconnects. If controllers remain connected, the room remains open. If all members leave, the room may be closed after the server's empty-room timeout.
 
 ### `memberJoined`
 
@@ -418,6 +459,17 @@ Sent when queued data messages are flushed.
   ]
 }
 ```
+
+Each item in `messages` has the following fields:
+
+| Field         | Type           | Meaning                                                     |
+| ------------- | -------------- | ----------------------------------------------------------- |
+| `from`        | `string`       | Member ID of the sender.                                    |
+| `displayName` | `string`       | Display name of the sender.                                 |
+| `clientTime`  | `number`       | Original client-side time if provided by the sender.        |
+| `eventTime`   | `number`       | Estimated server-side event time used for ordering.         |
+| `receivedAt`  | `number`       | Server-side receive time used as a tie-breaker for ordering.|
+| `payload`     | any JSON value | Application-defined payload.                                |
 
 Queued messages are sorted by `eventTime`, then by `receivedAt`.
 
@@ -539,9 +591,17 @@ Common error codes:
 * Controllers can send `data`.
 * The receiver cannot send `data`.
 * Controller data is sent as `tick` only to the receiver.
+* If no receiver is active, controller data is discarded.
+* Controller data sent while no receiver is active is not buffered.
+* When a receiver reconnects, only data sent after the receiver becomes active is delivered.
+* Controller connections remain active while no receiver is active.
 * Controller join and leave events are sent only to the receiver.
+* Controller join and leave events that occur while no receiver is active are not buffered.
+* A receiver that reconnects receives the current active member list in `joined`.
 * Approval requests are sent only to the receiver.
-* If no receiver is active, controller data is ignored.
+* If a new receiver connects while another receiver is active, the previous receiver is closed with `receiver_replaced`.
+* The room is not closed simply because the receiver disconnects.
+* If all members leave, the room may be closed after the server's empty-room timeout.
 
 ## Client implementation notes
 

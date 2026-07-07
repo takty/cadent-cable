@@ -10,7 +10,7 @@
  * - Approval rooms require OK votes from active participants
  *
  * @author Takuto Yanagida
- * @version 2026-07-07
+ * @version 2026-07-08
  */
 
 import type { Server, ServerWebSocket } from 'bun';
@@ -19,6 +19,7 @@ import {
 	ROOM_MODE,
 	MEMBER_ROLE,
 	EVENT_TYPE,
+	JOIN_REQUEST_STATUS,
 	type RoomMode,
 	type MemberRole,
 	type JoinRequestStatus,
@@ -308,7 +309,7 @@ function handleWebSocketUpgrade(req: Request, server: Server<WSData>, url: URL):
 	const role: MemberRole = room.roomMode === ROOM_MODE.remote
 		? (isReceiver ? MEMBER_ROLE.receiver : MEMBER_ROLE.controller)
 		: MEMBER_ROLE.member;
-	const state: ConnState = isReceiver || room.approvalRatio === 0
+	const state: ConnState = isOwner || room.approvalRatio === 0
 		? 'active'
 		: 'pending';
 
@@ -394,7 +395,7 @@ function activateConnection(room: Room, ws: WS): void {
 		}
 		if (ws.data.role === MEMBER_ROLE.receiver) {
 			for (const req of room.pending.values()) {
-				send(ws, joinRequestMessage(room, req, 'created'));
+				send(ws, joinRequestMessage(room, req, JOIN_REQUEST_STATUS.created));
 			}
 		}
 		return;
@@ -410,7 +411,7 @@ function activateConnection(room: Room, ws: WS): void {
 	} satisfies RelayEvent);
 
 	for (const req of room.pending.values()) {
-		send(ws, joinRequestMessage(room, req, 'created'));
+		send(ws, joinRequestMessage(room, req, JOIN_REQUEST_STATUS.created));
 	}
 }
 
@@ -448,7 +449,7 @@ function createJoinRequest(room: Room, ws: WS): void {
 		timeoutMs  : JOIN_REQUEST_TIMEOUT_MS,
 	} satisfies RelayEvent);
 
-	dispatchEvent(room, joinRequestMessage(room, req, 'created'));
+	dispatchEvent(room, joinRequestMessage(room, req, JOIN_REQUEST_STATUS.created));
 }
 
 function joinRequestMessage(room: Room, req: JoinRequest, status: JoinRequestStatus, reason?: string): RelayEvent {

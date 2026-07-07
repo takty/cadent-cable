@@ -1,5 +1,5 @@
 import { createRoom, RelayConnection, type RelayConnectionOptions } from '../client';
-import { EVENT_TYPE, MEMBER_ROLE, type CreateRoomOptions, type MemberInfo, type QueuedMessage } from '../protocol';
+import { EVENT_TYPE, JOIN_REQUEST_STATUS, MEMBER_ROLE, type CreateRoomOptions, type MemberInfo, type QueuedMessage } from '../protocol';
 import { type RelayEvent } from '../protocol';
 
 // const SERVER_URL = 'http://localhost:3000/cc';
@@ -116,14 +116,14 @@ function handleRelayEvent(ev: RelayEvent<GamePayload>) {
 			break;
 		case EVENT_TYPE.joinRequest:
 			switch (ev.status) {
-				case 'created':
+				case JOIN_REQUEST_STATUS.created:
 					showJoinRequest(ev.requestId as string, ev.displayName as string, ev.approvals as number, ev.requiredApprovals as number);
 					break;
-				case 'updated':
+				case JOIN_REQUEST_STATUS.updated:
 					updateJoinRequest(ev.requestId as string, ev.approvals as number, ev.requiredApprovals as number);
 					break;
-				case 'expired':
-				case 'canceled':
+				case JOIN_REQUEST_STATUS.expired:
+				case JOIN_REQUEST_STATUS.canceled:
 					removeJoinRequest(ev.requestId as string);
 					break;
 			}
