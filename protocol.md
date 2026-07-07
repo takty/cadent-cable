@@ -88,7 +88,7 @@ Server-side time values are based on the server's monotonic clock.
 | `serverRecvTime` | Server monotonic time when a sync request was received.                    |
 | `serverSendTime` | Server monotonic time when a sync response was sent.                       |
 | `receivedAt`     | Server monotonic time when a `data` message was received.                  |
-| `eventTime`      | Estimated server-side event time for a `data` message.                    |
+| `eventTime`      | Estimated server-side event time for a `data` message.                     |
 | `expiresAt`      | Server monotonic time when a pending join request expires.                 |
 | `now`            | Server monotonic time returned by the health endpoint.                     |
 
@@ -209,7 +209,7 @@ Binary WebSocket messages are rejected with an `error` event.
 
 ### Local client wrapper events
 
-`open` and `close` are local events emitted by the TypeScript client wrapper.
+`open`, `close`, and `error` are local events emitted by the TypeScript client wrapper.
 
 They are not JSON messages sent over the WebSocket connection.
 
@@ -231,11 +231,11 @@ Sends application payload data.
 }
 ```
 
-| Field        | Type           | Required | Meaning                                |
-| ------------ | -------------- | -------- | -------------------------------------- |
-| `type`       | `"data"`       | Yes      | Message type.                          |
+| Field        | Type           | Required | Meaning                                                                                                |
+| ------------ | -------------- | -------- | ------------------------------------------------------------------------------------------------------ |
+| `type`       | `"data"`       | Yes      | Message type.                                                                                          |
 | `clientTime` | `number`       | No       | Client monotonic time in milliseconds. If omitted, the server uses its receive time as the event time. |
-| `payload`    | any JSON value | Yes      | Application-defined payload.           |
+| `payload`    | any JSON value | Yes      | Application-defined payload.                                                                           |
 
 If `clientTime` is present and a valid clock offset is available, the server estimates `eventTime` in server monotonic time from `clientTime`; otherwise, `receivedAt` is used as `eventTime`.
 
@@ -569,6 +569,7 @@ Common error codes:
 | `unsupported_message`       | The server received a non-text WebSocket message.   |
 | `invalid_json`              | The message was not valid JSON.                     |
 | `invalid_message`           | The message was not a JSON object.                  |
+| `invalid_data_message`      | A `data` message did not include `payload`.         |
 | `unknown_type`              | The message type is not supported.                  |
 | `not_active`                | The connection is not active yet.                   |
 | `not_receiver`              | The operation is allowed only for the receiver.     |
