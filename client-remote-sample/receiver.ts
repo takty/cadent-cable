@@ -1,5 +1,5 @@
 import { createRoom, RelayConnection, type RelayConnectionOptions } from '../client';
-import { type CreateRoomOptions, type MemberInfo, type QueuedMessage, type RelayEvent } from '../types';
+import { type CreateRoomOptions, type MemberInfo, type QueuedMessage, type RelayEvent } from '../protocol';
 
 declare const QRCode: new (
 	el: HTMLElement,

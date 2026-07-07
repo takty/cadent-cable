@@ -27,7 +27,7 @@ import {
 	buildWebSocketUrl,
 } from './utils';
 import { getEnvBool, getEnvInt, getRouteName, getEndpointBaseUrl } from './utils-server';
-import type { RoomMode, MemberRole, JoinRequestStatus, CreateRoomOptions, CreateRoomResult, MemberInfo, QueuedMessage, RelayEvent } from './types';
+import type { RoomMode, MemberRole, JoinRequestStatus, CreateRoomOptions, CreateRoomResult, MemberInfo, QueuedMessage, RelayEvent } from './protocol';
 
 export type TimeoutHandle  = ReturnType<typeof setTimeout>;
 type IntervalHandle        = ReturnType<typeof setInterval>;

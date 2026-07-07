@@ -10,7 +10,7 @@ import type {
 	CreateRoomOptions,
 	CreateRoomResult,
 	RelayEvent
-} from './types';
+} from './protocol';
 import {
 	buildWebSocketUrl,
 	joinUrl,

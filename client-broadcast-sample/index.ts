@@ -1,6 +1,6 @@
 import { createRoom, RelayConnection, type RelayConnectionOptions } from '../client';
-import { type CreateRoomOptions, type MemberInfo, type QueuedMessage } from '../types';
-import { type RelayEvent } from '../types';
+import { type CreateRoomOptions, type MemberInfo, type QueuedMessage } from '../protocol';
+import { type RelayEvent } from '../protocol';
 
 // const SERVER_URL = 'http://localhost:3000/cc';
 const SERVER_URL = 'http://10.13.106.1/api/cc';
