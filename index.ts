@@ -229,7 +229,7 @@ function close(ws: ServerWebSocket<WSData>) {
 		if (req) {
 			clearTimeout(req.timer);
 			room.pending.delete(req.requestId);
-			dispatchEvent(room, joinRequestMessage(room, req, 'canceled'));
+			dispatchEvent(room, joinRequestMessage(room, req, JOIN_REQUEST_STATUS.canceled));
 		}
 	}
 }
@@ -491,7 +491,7 @@ function handleApproval(ws: WS, msg: any): void {
 	}
 	req.approvals.add(ws.data.memberId);
 
-	dispatchEvent(room, joinRequestMessage(room, req, 'updated'));
+	dispatchEvent(room, joinRequestMessage(room, req, JOIN_REQUEST_STATUS.updated));
 
 	if (req.approvals.size >= req.requiredApprovals) {
 		acceptJoinRequest(room, req.requestId);
@@ -523,7 +523,7 @@ function rejectJoinRequest(room: Room, requestId: string, reason: string): void 
 	} satisfies RelayEvent);
 	req.ws.close(1008, `join_rejected:${reason}`);
 
-	dispatchEvent(room, joinRequestMessage(room, req, 'expired', reason));
+	dispatchEvent(room, joinRequestMessage(room, req, JOIN_REQUEST_STATUS.expired, reason));
 }
 
 // -----------------------------------------------------------------------------
