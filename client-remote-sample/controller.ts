@@ -1,9 +1,9 @@
 import { RelayConnection, type RelayConnectionOptions } from '../client';
 import { type RelayEvent } from '../types';
 
-const SERVER_URL    = 'http://localhost:3000/cadent-cable';
-// const SERVER_URL = 'http://10.13.106.132:3000/cadent-cable';
-const DISPLAY_NAME  = 'controller';
+// const SERVER_URL   = 'http://localhost:3000/cc';
+const SERVER_URL   = 'http://10.13.106.1/api/cc';
+const DISPLAY_NAME = 'controller';
 
 type ButtonName = 'up' | 'down' | 'left' | 'right' | 'a' | 'b';
 
@@ -75,40 +75,33 @@ function handleRelayEvent(ev: RelayEvent<RemotePayload>) {
 		case 'open':
 			setStatus('Connected. Waiting for join result...');
 			break;
-
 		case 'joined':
 			isConnected = true;
 			setButtonsEnabled(true);
 			setStatus('Ready.');
 			break;
-
 		case 'pending':
 			setStatus(`Waiting for approval... (${ev.requiredApprovals} OK required)`);
 			break;
-
 		case 'joinRejected':
 			isConnected = false;
 			setButtonsEnabled(false);
 			setStatus(`Join rejected: ${ev.reason}`);
 			break;
-
 		case 'roomClosed':
 			isConnected = false;
 			setButtonsEnabled(false);
 			setStatus(`Room closed: ${ev.reason}`);
 			break;
-
 		case 'error':
 			setStatus(`Error: ${ev.code ?? 'unknown'} ${ev.message ?? ''}`.trim());
 			break;
-
 		case 'close':
 			isConnected = false;
 			setButtonsEnabled(false);
 			releaseAllButtons();
 			setStatus(`Closed: ${ev.code} ${ev.reason}`.trim());
 			break;
-
 		case 'syncStatus':
 		case 'heartbeat':
 		case 'tick':

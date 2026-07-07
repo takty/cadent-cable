@@ -6,8 +6,8 @@ declare const QRCode: new (
 	options: { text: string; width: number; height: number; }
 ) => unknown;
 
-const SERVER_URL     = 'http://localhost:3000/cadent-cable';
-// const SERVER_URL  = 'http://10.13.106.132:3000/cadent-cable';
+// const SERVER_URL     = 'http://localhost:3000/cc';
+const SERVER_URL     = 'http://10.13.106.1/api/cc';
 const MOVE_SPEED     = 160; // px/sec
 const CHARACTER_SIZE = 28;
 
@@ -143,44 +143,35 @@ function handleRelayEvent(ev: RelayEvent<RemotePayload>) {
 		case 'open':
 			setStatus('Connected. Waiting for join result...');
 			break;
-
 		case 'joined':
 			setStatus(`Receiver joined room ${ev.roomId}`);
 			setCharactersFromMembers(ev.members as MemberInfo[]);
 			break;
-
 		case 'memberJoined':
 			setCharactersFromMembers(ev.members as MemberInfo[]);
 			break;
-
 		case 'memberLeft':
 			deleteCharacter(ev.memberId as string);
 			updateControllerCount();
 			break;
-
 		case 'heartbeat':
 			setCharactersFromMembers(ev.members as MemberInfo[]);
 			break;
-
 		case 'tick':
 			handleTick(ev.messages as QueuedMessage<RemotePayload>[]);
 			break;
-
 		case 'roomClosed':
 			stopReceiver();
 			setStatus(`Room closed: ${ev.reason}`);
 			break;
-
 		case 'error':
 			setStatus(`Error: ${ev.code ?? 'unknown'} ${ev.message ?? ''}`.trim());
 			break;
-
 		case 'close':
 			createButton.disabled = false;
 			leaveButton.disabled  = true;
 			setStatus(`Closed: ${ev.code} ${ev.reason}`.trim());
 			break;
-
 		case 'syncStatus':
 			break;
 	}
@@ -309,10 +300,10 @@ function updateFrame(now: number) {
 function renderCharacter(c: Character) {
 	const scale = c.buttons.has('b') ? 1.45 : 1;
 
-	c.el.style.left = `${c.x - CHARACTER_SIZE / 2}px`;
-	c.el.style.top  = `${c.y - CHARACTER_SIZE / 2}px`;
-	c.el.style.backgroundColor = COLORS[c.colorIndex];
-	c.el.style.transform = `scale(${scale})`;
+	c.el.style.left            = `${c.x - CHARACTER_SIZE / 2}px`;
+	c.el.style.top             = `${c.y - CHARACTER_SIZE / 2}px`;
+	c.el.style.backgroundColor = COLORS[c.colorIndex] as string;
+	c.el.style.transform       = `scale(${scale})`;
 }
 
 function wrap(v: number, max: number): number {
@@ -324,7 +315,7 @@ function renderControllerUrl() {
 	const url = new URL('./controller.html', location.href);
 	url.searchParams.set('roomId', roomId);
 
-	controllerUrlEl.href = url.toString();
+	controllerUrlEl.href        = url.toString();
 	controllerUrlEl.textContent = url.toString();
 
 	qrEl.textContent = '';
