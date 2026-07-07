@@ -10,27 +10,45 @@
  * - Approval rooms require OK votes from active participants
  *
  * @author Takuto Yanagida
- * @version 2026-07-06
+ * @version 2026-07-07
  */
 
 import type { Server, ServerWebSocket } from 'bun';
 import {
+	ROUTE,
+	ROOM_MODE,
+	MEMBER_ROLE,
+	EVENT_TYPE,
+	type RoomMode,
+	type MemberRole,
+	type JoinRequestStatus,
+	type CreateRoomOptions,
+	type CreateRoomResult,
+	type RelayEvent,
+	type QueuedMessage,
+	type MemberInfo,
+} from './protocol';
+import {
 	DEFAULT_ID_CHARS,
-	createId,
-	generateUniqueCode,
-	jsonResponse,
-	normalizeApprovalRatio,
-	normalizeDisplayName,
 	normalizeId,
-	validateDisplayName,
 	validateId,
+	normalizeDisplayName,
+	validateDisplayName,
+	normalizeApprovalRatio,
 	buildWebSocketUrl,
 } from './utils';
-import { getEnvBool, getEnvInt, getRouteName, getEndpointBaseUrl } from './utils-server';
-import type { RoomMode, MemberRole, JoinRequestStatus, CreateRoomOptions, CreateRoomResult, MemberInfo, QueuedMessage, RelayEvent } from './protocol';
+import {
+	getEnvInt,
+	getEnvBool,
+	getRouteName,
+	getEndpointBaseUrl,
+	jsonResponse,
+	createId,
+	generateUniqueCode,
+} from './utils-server';
 
-export type TimeoutHandle  = ReturnType<typeof setTimeout>;
-type IntervalHandle        = ReturnType<typeof setInterval>;
+export type TimeoutHandle = ReturnType<typeof setTimeout>;
+type IntervalHandle       = ReturnType<typeof setInterval>;
 
 type ConnState = 'active' | 'pending';
 
@@ -117,13 +135,13 @@ const server = Bun.serve<WSData>({
 		const url   = new URL(req.url);
 		const route = getRouteName(url.pathname);
 
-		if (req.method === 'GET' && route === 'health') {
+		if (req.method === 'GET' && route === ROUTE.health) {
 			return jsonResponse({ ok: true, rooms: rooms.size, now: performance.now() }, CORS_HEADERS);
 		}
-		if (req.method === 'POST' && route === 'rooms') {
+		if (req.method === 'POST' && route === ROUTE.rooms) {
 			return await handleCreateRoom(req);
 		}
-		if (route === 'ws') {
+		if (route === ROUTE.ws) {
 			return handleWebSocketUpgrade(req, server, url);
 		}
 		return jsonResponse({ ok: false, error: 'not_found' }, CORS_HEADERS, 404);
@@ -162,11 +180,11 @@ function message(ws: ServerWebSocket<WSData>, raw: string | Buffer<ArrayBuffer>)
 		return;
 	}
 	switch (msg.type) {
-		case 'data'       : handleDataMessage(ws, msg); break;
-		case 'approve'    : handleApproval(ws, msg); break;
-		case 'syncRequest': handleSync(ws, msg); break;
-		case 'syncReport' : handleSyncResult(ws, msg); break;
-		default           : sendError(ws, 'unknown_type', `Unknown message type: ${String(msg.type)}`);
+		case EVENT_TYPE.data       : handleDataMessage(ws, msg); break;
+		case EVENT_TYPE.approve    : handleApproval(ws, msg); break;
+		case EVENT_TYPE.syncRequest: handleSync(ws, msg); break;
+		case EVENT_TYPE.syncReport : handleSyncResult(ws, msg); break;
+		default                    : sendError(ws, 'unknown_type', `Unknown message type: ${String(msg.type)}`);
 	}
 }
 
@@ -177,14 +195,14 @@ function close(ws: ServerWebSocket<WSData>) {
 	if (ws.data.state === 'active') {
 		room.active.delete(ws);
 
-		if (room.roomMode === 'remote') {
-			if (ws.data.role === 'receiver') {
+		if (room.roomMode === ROOM_MODE.remote) {
+			if (ws.data.role === MEMBER_ROLE.receiver) {
 				if (room.receiver === ws) {
 					room.receiver = undefined;
 				}
 			} else {
 				sendToReceiver(room, {
-					type       : 'memberLeft',
+					type       : EVENT_TYPE.memberLeft,
 					serverTime : performance.now(),
 					roomId     : room.roomId,
 					memberId   : ws.data.memberId as string,
@@ -196,7 +214,7 @@ function close(ws: ServerWebSocket<WSData>) {
 		}
 
 		sendToRoom(room, {
-			type       : 'memberLeft',
+			type       : EVENT_TYPE.memberLeft,
 			serverTime : performance.now(),
 			roomId     : room.roomId,
 			memberId   : ws.data.memberId as string,
@@ -232,7 +250,7 @@ async function handleCreateRoom(req: Request): Promise<Response> {
 	} catch {
 		body = {};
 	}
-	const rMode: RoomMode = body.roomMode === 'remote' ? 'remote' : 'broadcast';
+	const rMode: RoomMode = body.roomMode === ROOM_MODE.remote ? ROOM_MODE.remote : ROOM_MODE.broadcast;
 	const ratio           = normalizeApprovalRatio(body.approvalRatio);
 
 	let roomId: string;
@@ -258,11 +276,11 @@ async function handleCreateRoom(req: Request): Promise<Response> {
 		roomMode     : room.roomMode,
 		approvalRatio: room.approvalRatio,
 		ownerToken   : room.ownerToken,
-		joinUrl      : buildWebSocketUrl(base, 'ws', {
+		joinUrl      : buildWebSocketUrl(base, ROUTE.ws, {
 			roomId     : room.roomId,
 			displayName: '...',
 		}, true),
-		ownerJoinUrl : buildWebSocketUrl(base, 'ws', {
+		ownerJoinUrl : buildWebSocketUrl(base, ROUTE.ws, {
 			roomId     : room.roomId,
 			displayName: '...',
 			ownerToken : room.ownerToken,
@@ -285,10 +303,14 @@ function handleWebSocketUpgrade(req: Request, server: Server<WSData>, url: URL):
 	if (displayNameError) return jsonResponse({ ok: false, error: displayNameError }, CORS_HEADERS, 400);
 
 	const isOwner    = ownerToken !== '' && ownerToken === room.ownerToken;
-	const isReceiver = room.roomMode === 'remote' && isOwner;
+	const isReceiver = room.roomMode === ROOM_MODE.remote && isOwner;
 
-	const role : MemberRole = room.roomMode === 'remote' ? (isReceiver ? 'receiver' : 'controller') : 'member';
-	const state: ConnState  = isReceiver || room.approvalRatio === 0 ? 'active' : 'pending';
+	const role: MemberRole = room.roomMode === ROOM_MODE.remote
+		? (isReceiver ? MEMBER_ROLE.receiver : MEMBER_ROLE.controller)
+		: MEMBER_ROLE.member;
+	const state: ConnState = isReceiver || room.approvalRatio === 0
+		? 'active'
+		: 'pending';
 
 	const ok = server.upgrade(req, {
 		data: {
@@ -332,7 +354,7 @@ function activateConnection(room: Room, ws: WS): void {
 	ws.data.memberId  = createId('m');
 	ws.data.requestId = undefined;
 
-	if (room.roomMode === 'remote' && ws.data.role === 'receiver') {
+	if (room.roomMode === ROOM_MODE.remote && ws.data.role === MEMBER_ROLE.receiver) {
 		const prev = room.receiver;
 		room.receiver = ws;
 
@@ -344,10 +366,12 @@ function activateConnection(room: Room, ws: WS): void {
 	}
 
 	room.active.add(ws);
-	const members = room.roomMode === 'remote' && ws.data.role === 'controller' ? [] : getMembers(room);
+	const members = room.roomMode === ROOM_MODE.remote && ws.data.role === MEMBER_ROLE.controller
+		? []
+		: getMembers(room);
 
 	send(ws, {
-		type       : 'joined',
+		type       : EVENT_TYPE.joined,
 		serverTime : performance.now(),
 		roomId     : room.roomId,
 		roomMode   : room.roomMode,
@@ -357,10 +381,10 @@ function activateConnection(room: Room, ws: WS): void {
 		members,
 	} satisfies RelayEvent);
 
-	if (room.roomMode === 'remote') {
-		if (ws.data.role === 'controller') {
+	if (room.roomMode === ROOM_MODE.remote) {
+		if (ws.data.role === MEMBER_ROLE.controller) {
 			sendToReceiver(room, {
-				type       : 'memberJoined',
+				type       : EVENT_TYPE.memberJoined,
 				serverTime : performance.now(),
 				roomId     : room.roomId,
 				memberId   : ws.data.memberId,
@@ -368,7 +392,7 @@ function activateConnection(room: Room, ws: WS): void {
 				members    : getMembers(room),
 			} satisfies RelayEvent);
 		}
-		if (ws.data.role === 'receiver') {
+		if (ws.data.role === MEMBER_ROLE.receiver) {
 			for (const req of room.pending.values()) {
 				send(ws, joinRequestMessage(room, req, 'created'));
 			}
@@ -377,7 +401,7 @@ function activateConnection(room: Room, ws: WS): void {
 	}
 
 	sendToRoom(room, {
-		type       : 'memberJoined',
+		type       : EVENT_TYPE.memberJoined,
 		serverTime : performance.now(),
 		roomId     : room.roomId,
 		memberId   : ws.data.memberId,
@@ -393,7 +417,7 @@ function activateConnection(room: Room, ws: WS): void {
 // -----------------------------------------------------------------------------
 
 function createJoinRequest(room: Room, ws: WS): void {
-	const approverCount = room.roomMode === 'remote' ? (room.receiver ? 1 : 0) : room.active.size;
+	const approverCount = room.roomMode === ROOM_MODE.remote ? (room.receiver ? 1 : 0) : room.active.size;
 
 	const requestId         = createId('req');
 	const requiredApprovals = Math.max(1, Math.ceil(approverCount * room.approvalRatio));
@@ -415,7 +439,7 @@ function createJoinRequest(room: Room, ws: WS): void {
 	room.pending.set(requestId, req);
 
 	send(ws, {
-		type       : 'pending',
+		type       : EVENT_TYPE.pending,
 		serverTime : performance.now(),
 		roomId     : room.roomId,
 		requestId,
@@ -429,7 +453,7 @@ function createJoinRequest(room: Room, ws: WS): void {
 
 function joinRequestMessage(room: Room, req: JoinRequest, status: JoinRequestStatus, reason?: string): RelayEvent {
 	return {
-		type             : 'joinRequest',
+		type             : EVENT_TYPE.joinRequest,
 		status,
 		serverTime       : performance.now(),
 		roomId           : room.roomId,
@@ -452,7 +476,7 @@ function handleApproval(ws: WS, msg: any): void {
 		sendError(ws, 'room_not_found', 'Room not found.');
 		return;
 	}
-	if (room.roomMode === 'remote' && ws.data.role !== 'receiver') {
+	if (room.roomMode === ROOM_MODE.remote && ws.data.role !== MEMBER_ROLE.receiver) {
 		sendError(ws, 'not_receiver', 'Only the receiver can approve join requests in remote mode.');
 		return;
 	}
@@ -490,7 +514,7 @@ function rejectJoinRequest(room: Room, requestId: string, reason: string): void 
 	room.pending.delete(requestId);
 
 	send(req.ws, {
-		type      : 'joinRejected',
+		type      : EVENT_TYPE.joinRejected,
 		serverTime: performance.now(),
 		roomId    : room.roomId,
 		requestId,
@@ -513,8 +537,8 @@ function handleDataMessage(ws: WS, msg: any): void {
 		sendError(ws, 'room_not_found', 'Room not found.');
 		return;
 	}
-	if (room.roomMode === 'remote') {
-		if (ws.data.role === 'receiver') {
+	if (room.roomMode === ROOM_MODE.remote) {
+		if (ws.data.role === MEMBER_ROLE.receiver) {
 			sendError(ws, 'receiver_cannot_send_data', 'Receiver cannot send data in remote mode.');
 			return;
 		}
@@ -546,7 +570,7 @@ function handleDataMessage(ws: WS, msg: any): void {
 function flushRoomQueue(room: Room): void {
 	if (room.queue.length === 0) return;
 
-	if (room.roomMode === 'remote') {
+	if (room.roomMode === ROOM_MODE.remote) {
 		if (!room.receiver || !room.active.has(room.receiver)) {
 			room.queue.splice(0, room.queue.length);
 			return;
@@ -561,7 +585,7 @@ function flushRoomQueue(room: Room): void {
 	room.lastTickSentAt = performance.now();
 
 	dispatchEvent(room, {
-		type      : 'tick',
+		type      : EVENT_TYPE.tick,
 		serverTime: room.lastTickSentAt,
 		roomId    : room.roomId,
 		tickSeq   : room.tickSeq,
@@ -570,7 +594,7 @@ function flushRoomQueue(room: Room): void {
 }
 
 function sendHeartbeat(room: Room): void {
-	if (room.roomMode === 'remote') {
+	if (room.roomMode === ROOM_MODE.remote) {
 		if (!room.receiver || !room.active.has(room.receiver)) return;
 	} else {
 		if (room.active.size === 0) return;
@@ -581,7 +605,7 @@ function sendHeartbeat(room: Room): void {
 	if (t - room.lastTickSentAt < HEARTBEAT_INTERVAL_MS) return;
 
 	dispatchEvent(room, {
-		type      : 'heartbeat',
+		type      : EVENT_TYPE.heartbeat,
 		serverTime: t,
 		roomId    : room.roomId,
 		tickSeq   : room.tickSeq,
@@ -600,7 +624,7 @@ function handleSync(ws: WS, msg: any): void {
 	const serverRecvTime = performance.now();
 	const serverSendTime = performance.now();
 
-	send(ws, { type: 'syncResponse', clientSendTime, serverRecvTime, serverSendTime } satisfies RelayEvent);
+	send(ws, { type: EVENT_TYPE.syncResponse, clientSendTime, serverRecvTime, serverSendTime } satisfies RelayEvent);
 }
 
 function handleSyncResult(ws: WS, msg: any): void {
@@ -625,7 +649,7 @@ function handleSyncResult(ws: WS, msg: any): void {
 		ws.data.offsetToServerTime = offset;
 	}
 	send(ws, {
-		type              : 'syncStatus',
+		type              : EVENT_TYPE.syncStatus,
 		serverTime        : performance.now(),
 		rtt               : ws.data.rtt,
 		offsetToServerTime: ws.data.offsetToServerTime as number,
@@ -662,7 +686,7 @@ function deleteRoom(roomId: string, reason: string): void {
 	for (const req of room.pending.values()) {
 		clearTimeout(req.timer);
 		send(req.ws, {
-			type      : 'roomClosed',
+			type      : EVENT_TYPE.roomClosed,
 			serverTime: performance.now(),
 			roomId,
 			reason,
@@ -670,7 +694,7 @@ function deleteRoom(roomId: string, reason: string): void {
 		req.ws.close(1001, 'room_closed');
 	}
 	sendToRoom(room, {
-		type      : 'roomClosed',
+		type      : EVENT_TYPE.roomClosed,
 		serverTime: performance.now(),
 		roomId,
 		reason,
@@ -684,7 +708,7 @@ function deleteRoom(roomId: string, reason: string): void {
 // -----------------------------------------------------------------------------
 
 function dispatchEvent(room: Room, ev: RelayEvent): void {
-	if (room.roomMode === 'remote') {
+	if (room.roomMode === ROOM_MODE.remote) {
 		sendToReceiver(room, ev);
 	} else {
 		sendToRoom(room, ev);
@@ -704,7 +728,7 @@ function sendToRoom(room: Room, ev: RelayEvent): void {
 }
 
 function sendError(ws: WS, code: string, message?: string): void {
-	send(ws, { type: 'error', code, message });
+	send(ws, { type: EVENT_TYPE.error, code, message });
 }
 
 function send(ws: WS, ev: RelayEvent): void {

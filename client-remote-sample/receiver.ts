@@ -1,5 +1,5 @@
 import { createRoom, RelayConnection, type RelayConnectionOptions } from '../client';
-import { type CreateRoomOptions, type MemberInfo, type QueuedMessage, type RelayEvent } from '../protocol';
+import { EVENT_TYPE, MEMBER_ROLE, ROOM_MODE, type CreateRoomOptions, type MemberInfo, type QueuedMessage, type RelayEvent } from '../protocol';
 
 declare const QRCode: new (
 	el: HTMLElement,
@@ -81,7 +81,7 @@ async function startReceiver() {
 	setStatus('Creating remote room...');
 
 	const result = await createRoom(SERVER_URL, {
-		roomMode     : 'remote',
+		roomMode     : ROOM_MODE.remote,
 		approvalRatio: 0,
 	} satisfies CreateRoomOptions);
 
@@ -140,39 +140,39 @@ function stopReceiver() {
 
 function handleRelayEvent(ev: RelayEvent<RemotePayload>) {
 	switch (ev.type) {
-		case 'open':
+		case EVENT_TYPE.open:
 			setStatus('Connected. Waiting for join result...');
 			break;
-		case 'joined':
+		case EVENT_TYPE.joined:
 			setStatus(`Receiver joined room ${ev.roomId}`);
 			setCharactersFromMembers(ev.members as MemberInfo[]);
 			break;
-		case 'memberJoined':
+		case EVENT_TYPE.memberJoined:
 			setCharactersFromMembers(ev.members as MemberInfo[]);
 			break;
-		case 'memberLeft':
+		case EVENT_TYPE.memberLeft:
 			deleteCharacter(ev.memberId as string);
 			updateControllerCount();
 			break;
-		case 'heartbeat':
+		case EVENT_TYPE.heartbeat:
 			setCharactersFromMembers(ev.members as MemberInfo[]);
 			break;
-		case 'tick':
+		case EVENT_TYPE.tick:
 			handleTick(ev.messages as QueuedMessage<RemotePayload>[]);
 			break;
-		case 'roomClosed':
+		case EVENT_TYPE.roomClosed:
 			stopReceiver();
 			setStatus(`Room closed: ${ev.reason}`);
 			break;
-		case 'error':
+		case EVENT_TYPE.error:
 			setStatus(`Error: ${ev.code ?? 'unknown'} ${ev.message ?? ''}`.trim());
 			break;
-		case 'close':
+		case EVENT_TYPE.close:
 			createButton.disabled = false;
 			leaveButton.disabled  = true;
 			setStatus(`Closed: ${ev.code} ${ev.reason}`.trim());
 			break;
-		case 'syncStatus':
+		case EVENT_TYPE.syncStatus:
 			break;
 	}
 }
@@ -213,7 +213,7 @@ function setCharactersFromMembers(list: MemberInfo[]) {
 	const controllerIds = new Set<string>();
 
 	for (const m of list) {
-		if (m.role !== 'controller') continue;
+		if (m.role !== MEMBER_ROLE.controller) continue;
 		controllerIds.add(m.memberId);
 		if (!characters.has(m.memberId)) createCharacter(m.memberId);
 	}

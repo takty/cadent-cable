@@ -1,5 +1,5 @@
 import { createRoom, RelayConnection, type RelayConnectionOptions } from '../client';
-import { type CreateRoomOptions, type MemberInfo, type QueuedMessage } from '../protocol';
+import { EVENT_TYPE, MEMBER_ROLE, type CreateRoomOptions, type MemberInfo, type QueuedMessage } from '../protocol';
 import { type RelayEvent } from '../protocol';
 
 // const SERVER_URL = 'http://localhost:3000/cc';
@@ -102,19 +102,19 @@ async function connect(options: { ownerToken?: string }) {
 
 function handleRelayEvent(ev: RelayEvent<GamePayload>) {
 	switch (ev.type) {
-		case 'open':
+		case EVENT_TYPE.open:
 			setStatus('Connected. Waiting for join result...');
 			break;
-		case 'joined':
+		case EVENT_TYPE.joined:
 			myMemberId = ev.memberId as string;
 			setMembers(ev.members as MemberInfo[]);
 			setConnected(true);
 			setStatus(`Joined room ${ev.roomId} as ${ev.displayName}`);
 			break;
-		case 'pending':
+		case EVENT_TYPE.pending:
 			setStatus(`Waiting for approval... (${ev.requiredApprovals} OK required)`);
 			break;
-		case 'joinRequest':
+		case EVENT_TYPE.joinRequest:
 			switch (ev.status) {
 				case 'created':
 					showJoinRequest(ev.requestId as string, ev.displayName as string, ev.approvals as number, ev.requiredApprovals as number);
@@ -128,35 +128,39 @@ function handleRelayEvent(ev: RelayEvent<GamePayload>) {
 					break;
 			}
 			break;
-		case 'joinRejected':
+		case EVENT_TYPE.joinRejected:
 			setStatus(`Join rejected: ${ev.reason}`);
 			setConnected(false);
 			break;
-		case 'memberJoined':
+		case EVENT_TYPE.memberJoined:
 			setMembers(ev.members as MemberInfo[]);
 			break;
-		case 'memberLeft':
+		case EVENT_TYPE.memberLeft:
 			members.delete(ev.memberId as string);
 			renderMembers();
 			break;
-		case 'heartbeat':
+		case EVENT_TYPE.heartbeat:
 			setMembers(ev.members as MemberInfo[]);
 			break;
-		case 'tick':
+		case EVENT_TYPE.tick:
 			for (const msg of ev.messages as QueuedMessage<GamePayload>[]) {
 				if (!members.has(msg.from)) {
-					members.set(msg.from, { memberId: msg.from, displayName: msg.displayName, role: 'member' });
+					members.set(msg.from, {
+						memberId   : msg.from,
+						displayName: msg.displayName,
+						role       : MEMBER_ROLE.member
+					});
 				}
 				if (msg.payload?.kind === 'tap') flashMember(msg.from);
 			}
 			break;
-		case 'syncStatus':
+		case EVENT_TYPE.syncStatus:
 			// The sample game does not display sync values, but the generic client keeps them.
 			break;
-		case 'error':
+		case EVENT_TYPE.error:
 			setStatus(`Error: ${ev.code ?? 'unknown'} ${ev.message ?? ''}`.trim());
 			break;
-		case 'close':
+		case EVENT_TYPE.close:
 			setConnected(false);
 			setStatus(`Closed: ${ev.code} ${ev.reason}`.trim());
 			break;

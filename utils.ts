@@ -2,53 +2,16 @@
  * Utilities
  *
  * @author Takuto Yanagida
- * @version 2026-07-06
+ * @version 2026-07-07
  */
+
+export const DEFAULT_ID_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';  // cspell:disable-line
 
 export type IdValidationOptions = {
 	chars : string;
 	minLen: number;
 	maxLen: number;
 };
-
-export const DEFAULT_ID_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';  // cspell:disable-line
-
-export function jsonResponse(v: unknown, headers = {}, status = 200): Response {
-	return new Response(JSON.stringify(v), {
-		status,
-		headers: {
-			...headers,
-			'Content-Type': 'application/json; charset=utf-8',
-		},
-	});
-}
-
-// -----------------------------------------------------------------------------
-
-export function createId(pf: string): string {
-	return `${pf}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
-}
-
-export function generateUniqueCode(
-	len      : number,
-	chars    : string,
-	exists   : (code: string) => boolean,
-	attempts = 1000,
-): string {
-	for (let i = 0; i < attempts; i++) {
-		const c = randomCode(len, chars);
-		if (!exists(c)) return c;
-	}
-	throw new Error('Could not generate a unique code.');
-}
-
-function randomCode(len: number, chars: string): string {
-	let out = '';
-	for (let i = 0; i < len; i++) {
-		out += chars[Math.floor(Math.random() * chars.length)];
-	}
-	return out;
-}
 
 export function normalizeId(v: string): string {
 	return v.trim().toUpperCase();

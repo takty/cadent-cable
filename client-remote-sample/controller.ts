@@ -1,5 +1,5 @@
 import { RelayConnection, type RelayConnectionOptions } from '../client';
-import { type RelayEvent } from '../protocol';
+import { EVENT_TYPE, type RelayEvent } from '../protocol';
 
 // const SERVER_URL   = 'http://localhost:3000/cc';
 const SERVER_URL   = 'http://10.13.106.1/api/cc';
@@ -72,41 +72,41 @@ async function connect() {
 
 function handleRelayEvent(ev: RelayEvent<RemotePayload>) {
 	switch (ev.type) {
-		case 'open':
+		case EVENT_TYPE.open:
 			setStatus('Connected. Waiting for join result...');
 			break;
-		case 'joined':
+		case EVENT_TYPE.joined:
 			isConnected = true;
 			setButtonsEnabled(true);
 			setStatus('Ready.');
 			break;
-		case 'pending':
+		case EVENT_TYPE.pending:
 			setStatus(`Waiting for approval... (${ev.requiredApprovals} OK required)`);
 			break;
-		case 'joinRejected':
+		case EVENT_TYPE.joinRejected:
 			isConnected = false;
 			setButtonsEnabled(false);
 			setStatus(`Join rejected: ${ev.reason}`);
 			break;
-		case 'roomClosed':
+		case EVENT_TYPE.roomClosed:
 			isConnected = false;
 			setButtonsEnabled(false);
 			setStatus(`Room closed: ${ev.reason}`);
 			break;
-		case 'error':
+		case EVENT_TYPE.error:
 			setStatus(`Error: ${ev.code ?? 'unknown'} ${ev.message ?? ''}`.trim());
 			break;
-		case 'close':
+		case EVENT_TYPE.close:
 			isConnected = false;
 			setButtonsEnabled(false);
 			releaseAllButtons();
 			setStatus(`Closed: ${ev.code} ${ev.reason}`.trim());
 			break;
-		case 'syncStatus':
-		case 'heartbeat':
-		case 'tick':
-		case 'memberJoined':
-		case 'memberLeft':
+		case EVENT_TYPE.syncStatus:
+		case EVENT_TYPE.heartbeat:
+		case EVENT_TYPE.tick:
+		case EVENT_TYPE.memberJoined:
+		case EVENT_TYPE.memberLeft:
 			break;
 	}
 }

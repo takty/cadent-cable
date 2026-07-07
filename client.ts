@@ -3,21 +3,31 @@
  * Generic room-based WebSocket relay server for Bun.
  *
  * @author Takuto Yanagida
- * @version 2026-07-06
+ * @version 2026-07-07
  */
 
-import type {
-	CreateRoomOptions,
-	CreateRoomResult,
-	RelayEvent
+import {
+	ROUTE,
+	ROOM_MODE,
+	EVENT_TYPE,
+	type CreateRoomOptions,
+	type CreateRoomResult,
+	type RelayEvent
 } from './protocol';
 import {
-	buildWebSocketUrl,
-	joinUrl,
-	normalizeApprovalRatio,
-	normalizeDisplayName,
 	normalizeId,
+	normalizeDisplayName,
+	normalizeApprovalRatio,
+	joinUrl,
+	buildWebSocketUrl,
 } from './utils';
+import {
+	browserRuntime,
+	CC_WS_OPEN,
+	type CCWebSocket,
+	type CCRuntime,
+	type CCTimerId,
+} from './runtime';
 
 export type RelayConnectionOptions<TPayload = unknown> = {
 	serverUrl      : string;
@@ -27,6 +37,7 @@ export type RelayConnectionOptions<TPayload = unknown> = {
 	autoSync?      : boolean;
 	syncIntervalMs?: number;
 	onEvent?       : (event: RelayEvent<TPayload>) => void;
+	runtime?       : CCRuntime;
 };
 
 export class RelayConnection<TPayload = unknown> {
@@ -39,8 +50,9 @@ export class RelayConnection<TPayload = unknown> {
 	rtt               : number | null = null;
 	offsetToServerTime: number | null = null;
 
-	#ws            : WebSocket | null = null;
-	#syncTimer     : number | null    = null;
+	#runtime       : CCRuntime;
+	#ws            : CCWebSocket | null = null;
+	#syncTimer     : CCTimerId | null = null;
 	#onEvent       : (event: RelayEvent<TPayload>) => void;
 	#autoSync      : boolean;
 	#syncIntervalMs: number;
@@ -50,6 +62,7 @@ export class RelayConnection<TPayload = unknown> {
 		this.roomId          = normalizeId(options.roomId);
 		this.displayName     = normalizeDisplayName(options.displayName);
 		this.ownerToken      = options.ownerToken;
+		this.#runtime        = options.runtime ?? browserRuntime;
 		this.#onEvent        = options.onEvent ?? (() => {});
 		this.#autoSync       = options.autoSync ?? true;
 		this.#syncIntervalMs = options.syncIntervalMs ?? 3000;
@@ -59,16 +72,16 @@ export class RelayConnection<TPayload = unknown> {
 		if (this.#ws !== null) return Promise.resolve();
 
 		return new Promise((resolve, reject) => {
-			const url = buildWebSocketUrl(this.serverUrl, 'ws', {
+			const url = buildWebSocketUrl(this.serverUrl, ROUTE.ws, {
 				roomId     : this.roomId,
 				displayName: this.displayName,
 				ownerToken : this.ownerToken ?? '',
 			});
-			const ws = new WebSocket(url);
+			const ws = this.#runtime.webSocketFactory.create(url);
 			this.#ws = ws;
 
 			ws.addEventListener('open', () => {
-				this.#emit({ type: 'open' } satisfies RelayEvent);
+				this.#emit({ type: EVENT_TYPE.open } satisfies RelayEvent);
 				if (this.#autoSync) this.startSync();
 				resolve();
 			});
@@ -77,10 +90,10 @@ export class RelayConnection<TPayload = unknown> {
 			ws.addEventListener('close', (ev) => {
 				this.stopSync();
 				this.#ws = null;
-				this.#emit({ type: 'close', code: ev.code, reason: ev.reason } satisfies RelayEvent);
+				this.#emit({ type: EVENT_TYPE.close, code: ev.code, reason: ev.reason } satisfies RelayEvent);
 			});
 			ws.addEventListener('error', () => {
-				this.#emit({ type: 'error', code: 'websocket_error' } satisfies RelayEvent);
+				this.#emit(makeErrorMessage('websocket_error'));
 				reject(new Error('WebSocket connection failed.'));
 			});
 		});
@@ -93,32 +106,32 @@ export class RelayConnection<TPayload = unknown> {
 	}
 
 	sendData(payload: TPayload): void {
-		this.#send({ type: 'data', clientTime: performance.now(), payload });
+		this.#send(makeDataMessage(this.#runtime.clock.now(), payload));
 	}
 
 	approve(requestId: string): void {
-		this.#send({ type: 'approve', requestId });
+		this.#send(makeApproveMessage(requestId));
 	}
 
 	syncOnce(): void {
-		this.#send({ type: 'syncRequest', clientSendTime: performance.now() });
+		this.#send(makeSyncRequestMessage(this.#runtime.clock.now()));
 	}
 
 	startSync(): void {
 		this.stopSync();
 		this.syncOnce();
-		this.#syncTimer = window.setInterval(() => this.syncOnce(), this.#syncIntervalMs);
+		this.#syncTimer = this.#runtime.timer.setInterval(() => this.syncOnce(), this.#syncIntervalMs);
 	}
 
 	stopSync(): void {
 		if (this.#syncTimer !== null) {
-			window.clearInterval(this.#syncTimer);
+			this.#runtime.timer.clearInterval(this.#syncTimer);
 			this.#syncTimer = null;
 		}
 	}
 
 	#send(value: unknown): void {
-		if (!this.#ws || this.#ws.readyState !== WebSocket.OPEN) {
+		if (!this.#ws || this.#ws.readyState !== CC_WS_OPEN) {
 			throw new Error('WebSocket is not open.');
 		}
 		this.#ws.send(JSON.stringify(value));
@@ -126,30 +139,24 @@ export class RelayConnection<TPayload = unknown> {
 
 	#handleMessage(data: unknown): void {
 		if (typeof data !== 'string') {
-			this.#emit({ type: 'error', code: 'unsupported_message', message: 'Only JSON text messages are supported.' } satisfies RelayEvent);
+			this.#emit(makeErrorMessage('unsupported_message', 'Only JSON text messages are supported.'));
 			return;
 		}
 		let msg: RelayEvent;
 		try {
 			msg = JSON.parse(data) as RelayEvent;
 		} catch {
-			this.#emit({ type: 'error', code: 'invalid_json', message: 'Received invalid JSON.' } satisfies RelayEvent);
+			this.#emit(makeErrorMessage('invalid_json', 'Received invalid JSON.'));
 			return;
 		}
-		if (msg.type === 'joined') {
+		if (msg.type === EVENT_TYPE.joined) {
 			this.memberId = msg.memberId as string;
 		}
-		if (msg.type === 'syncResponse') {
-			this.#send({
-				type          : 'syncReport',
-				clientSendTime: msg.clientSendTime,
-				serverRecvTime: msg.serverRecvTime,
-				serverSendTime: msg.serverSendTime,
-				clientRecvTime: performance.now(),
-			} satisfies RelayEvent);
+		if (msg.type === EVENT_TYPE.syncResponse) {
+			this.#send(makeSyncReportMessage(msg.clientSendTime, msg.serverRecvTime, msg.serverSendTime, this.#runtime.clock.now()));
 			return;
 		}
-		if (msg.type === 'syncStatus') {
+		if (msg.type === EVENT_TYPE.syncStatus) {
 			this.rtt                = msg.rtt as number;
 			this.offsetToServerTime = msg.offsetToServerTime as number;
 		}
@@ -161,19 +168,43 @@ export class RelayConnection<TPayload = unknown> {
 	}
 }
 
-export async function createRoom(serverUrl: string, options: CreateRoomOptions = {}): Promise<CreateRoomResult> {
-	const res = await fetch(joinUrl(serverUrl, 'rooms'), {
-		method : 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body   : JSON.stringify({
-			roomId       : options.roomId ?? null,
-			roomMode     : options.roomMode ?? 'broadcast',
-			approvalRatio: normalizeApprovalRatio(options.approvalRatio),
-		} satisfies CreateRoomOptions),
+export async function createRoom(serverUrl: string, options: CreateRoomOptions = {}, runtime: CCRuntime = browserRuntime): Promise<CreateRoomResult> {
+	return runtime.http.postJson<CreateRoomOptions, CreateRoomResult>(joinUrl(serverUrl, ROUTE.rooms), {
+		roomId       : options.roomId ?? null,
+		roomMode     : options.roomMode ?? ROOM_MODE.broadcast,
+		approvalRatio: normalizeApprovalRatio(options.approvalRatio),
 	});
-	const json = await res.json() as any;
-	if (!res.ok || !json.ok) {
-		throw new Error(json.error ?? `Failed to create room: ${res.status}`);
-	}
-	return json as CreateRoomResult;
+}
+
+// -----------------------------------------------------------------------------
+
+export function makeDataMessage<TPayload>(clientTime: number, payload: TPayload) {
+	return { type: EVENT_TYPE.data, clientTime, payload } satisfies RelayEvent<TPayload>;
+}
+
+export function makeApproveMessage(requestId: string) {
+	return { type: EVENT_TYPE.approve, requestId } satisfies RelayEvent;
+}
+
+export function makeSyncRequestMessage(clientSendTime: number) {
+	return { type: EVENT_TYPE.syncRequest, clientSendTime } satisfies RelayEvent;
+}
+
+export function makeSyncReportMessage(
+	clientSendTime: number,
+	serverRecvTime: number,
+	serverSendTime: number,
+	clientRecvTime: number,
+) {
+	return {
+		type: EVENT_TYPE.syncReport,
+		clientSendTime,
+		serverRecvTime,
+		serverSendTime,
+		clientRecvTime,
+	} satisfies RelayEvent;
+}
+
+export function makeErrorMessage(code: string, message?: string) {
+	return { type: EVENT_TYPE.error, code, message } satisfies RelayEvent;
 }
