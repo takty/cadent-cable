@@ -669,6 +669,8 @@ function maybeScheduleEmptyRoomDeletion(room: Room): void {
 	if (room.emptyTimer) return;
 
 	room.emptyTimer = setTimeout(() => {
+		room.emptyTimer = undefined;
+
 		if (room.active.size === 0) {
 			deleteRoom(room.roomId, 'empty_timeout');
 		}

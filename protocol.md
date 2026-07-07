@@ -12,6 +12,8 @@ A room is an isolated communication group identified by `roomId`.
 
 A room is not closed simply because a receiver disconnects. A room may be closed when it becomes empty and the server's empty-room timeout expires, or when the server explicitly closes it for another reason.
 
+A room is considered empty when it has no active members. Pending connections do not prevent empty-room timeout.
+
 ### Member
 
 A member is one active WebSocket connection in a room.
@@ -42,6 +44,8 @@ A reconnecting client is treated as a new WebSocket connection and receives a ne
 | `controller` | A controller client in `remote` mode.     |
 
 In `broadcast` mode, all active clients are `member`.
+
+In `broadcast` mode, a client with the correct `ownerToken` is still a `member`, but it can become active without approval.
 
 In `remote` mode:
 
