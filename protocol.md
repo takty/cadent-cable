@@ -687,7 +687,7 @@ Common error codes:
 
 ### Broadcast mode
 
-* Active members can send `data`.
+* Connected members can send `data`.
 * Data is queued by the server.
 * Queued data is sent as `tick` to all connected members.
 * `memberJoined`, `memberUpdated`, `memberLeft`, `joinRequest`, `tick`, `heartbeat`, and `roomClosed` are sent to connected members.
@@ -702,7 +702,7 @@ Common error codes:
 * Controller data is sent as `tick` only to the receiver.
 * If no receiver is connected, controller data is discarded.
 * Controller data sent while no receiver is connected is not buffered.
-* When a receiver reconnects, only data sent after the receiver becomes connected is delivered.
+* When a receiver resumes, only data sent after the receiver becomes connected is delivered.
 * Controller connections remain connected while no receiver is connected.
 * Controller join, update, and leave events are sent only to the receiver.
 * Controller join and leave events that occur while no receiver is connected are not buffered.

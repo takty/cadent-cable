@@ -423,14 +423,15 @@ function activateConnection(room: Room, ws: WS): void {
 
 	if (room.roomMode === ROOM_MODE.remote && member.role === MEMBER_ROLE.receiver) {
 		const prev = room.receiver;
-		room.receiver = member;
 
 		if (prev && prev !== member) {
 			if (prev.ws) {
 				sendError(prev.ws, 'receiver_replaced', 'Another receiver has connected.');
 			}
+			room.receiver = undefined;
 			removeMember(room, prev, 'receiver_replaced');
 		}
+		room.receiver = member;
 	}
 
 	const members = room.roomMode === ROOM_MODE.remote && member.role === MEMBER_ROLE.controller
