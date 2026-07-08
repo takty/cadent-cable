@@ -3,7 +3,7 @@
  * Generic room-based WebSocket relay server for Bun.
  *
  * @author Takuto Yanagida
- * @version 2026-07-07
+ * @version 2026-07-08
  */
 
 import {
@@ -34,6 +34,8 @@ export type RelayConnectionOptions<TPayload = unknown> = {
 	roomId         : string;
 	displayName    : string;
 	ownerToken?    : string;
+	memberId?      : string;
+	resumeToken?   : string;
 	autoSync?      : boolean;
 	syncIntervalMs?: number;
 	onEvent?       : (event: RelayEvent<TPayload>) => void;
@@ -43,10 +45,11 @@ export type RelayConnectionOptions<TPayload = unknown> = {
 export class RelayConnection<TPayload = unknown> {
 	readonly serverUrl  : string;
 	readonly roomId     : string;
-	readonly displayName: string;
 	readonly ownerToken?: string;
 
-	memberId          : string | null = null;
+	displayName       : string;
+	memberId          : string | null;
+	resumeToken       : string | null;
 	rtt               : number | null = null;
 	offsetToServerTime: number | null = null;
 
@@ -62,20 +65,32 @@ export class RelayConnection<TPayload = unknown> {
 		this.roomId          = normalizeId(options.roomId);
 		this.displayName     = normalizeDisplayName(options.displayName);
 		this.ownerToken      = options.ownerToken;
+		this.memberId        = options.memberId ?? null;
+		this.resumeToken     = options.resumeToken ?? null;
 		this.#runtime        = options.runtime ?? browserRuntime;
 		this.#onEvent        = options.onEvent ?? (() => {});
 		this.#autoSync       = options.autoSync ?? true;
 		this.#syncIntervalMs = options.syncIntervalMs ?? 3000;
 	}
 
-	connect(): Promise<void> {
+	setDisplayName(displayName: string): void {
+		this.displayName = normalizeDisplayName(displayName);
+	}
+
+	join(): Promise<void> {
 		if (this.#ws !== null) return Promise.resolve();
+
+		if ((this.memberId === null) !== (this.resumeToken === null)) {
+			return Promise.reject(new Error('Both memberId and resumeToken are required to resume.'));
+		}
 
 		return new Promise((resolve, reject) => {
 			const url = buildWebSocketUrl(this.serverUrl, ROUTE.ws, {
 				roomId     : this.roomId,
 				displayName: this.displayName,
 				ownerToken : this.ownerToken ?? '',
+				memberId   : this.memberId ?? '',
+				resumeToken: this.resumeToken ?? '',
 			});
 			const ws = this.#runtime.webSocketFactory.create(url);
 			this.#ws = ws;
@@ -99,10 +114,19 @@ export class RelayConnection<TPayload = unknown> {
 		});
 	}
 
-	disconnect(): void {
+	leave(): void {
+		const ws = this.#ws;
+
+		if (ws && ws.readyState === CC_WS_OPEN) {
+			ws.send(JSON.stringify(makeLeaveMessage()));
+		}
+
+		this.memberId = null;
+		this.resumeToken = null;
+
 		this.stopSync();
-		this.#ws?.close();
 		this.#ws = null;
+		ws?.close();
 	}
 
 	sendData(payload: TPayload): void {
@@ -150,7 +174,9 @@ export class RelayConnection<TPayload = unknown> {
 			return;
 		}
 		if (msg.type === EVENT_TYPE.joined) {
-			this.memberId = msg.memberId as string;
+			this.memberId    = msg.memberId as string;
+			this.resumeToken = msg.resumeToken as string;
+			this.displayName = msg.displayName as string;
 		}
 		if (msg.type === EVENT_TYPE.syncResponse) {
 			this.#send(makeSyncReportMessage(msg.clientSendTime, msg.serverRecvTime, msg.serverSendTime, this.#runtime.clock.now()));
@@ -184,6 +210,10 @@ export function makeDataMessage<TPayload>(clientTime: number, payload: TPayload)
 
 export function makeApproveMessage(requestId: string) {
 	return { type: EVENT_TYPE.approve, requestId } satisfies RelayEvent;
+}
+
+export function makeLeaveMessage() {
+	return { type: EVENT_TYPE.leave } satisfies RelayEvent;
 }
 
 export function makeSyncRequestMessage(clientSendTime: number) {

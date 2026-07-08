@@ -16,15 +16,20 @@ A room is considered empty when it has no active members. Pending connections do
 
 ### Member
 
-A member is one active WebSocket connection in a room.
+A member is a logical participant in a room.
 
-Each active member has:
+A member is not identical to a WebSocket connection. A member may temporarily lose its WebSocket connection and later resume with the same `memberId`.
+
+Each member has:
 
 * `memberId`
 * `displayName`
 * `role`
+* `state`
 
-A reconnecting client is treated as a new WebSocket connection and receives a new `memberId`.
+Each member also has a `resumeToken`, which is sent only to that member in the `joined` message. A client must keep both `memberId` and `resumeToken` to resume the same member after a temporary disconnection.
+
+A temporarily disconnected member remains in the room during the server's member-resume timeout. The default timeout is 10000 milliseconds. If the member does not resume before the timeout expires, the member leaves the room and `memberLeft` is sent.
 
 ### Room mode
 
@@ -56,6 +61,17 @@ In `remote` mode:
 * If the receiver disconnects, the room remains open while other active members remain.
 * The receiver can reconnect later by using the same `ownerToken`.
 * Controllers remain connected while no receiver is active.
+
+### Member state
+
+| Value          | Meaning                                                                 |
+| -------------- | ----------------------------------------------------------------------- |
+| `connected`    | The member currently has an active WebSocket connection.                |
+| `disconnected` | The member is temporarily disconnected but can still resume in the room. |
+
+A `disconnected` member is still treated as a member of the room until the member-resume timeout expires.
+
+A `disconnected` member is included in `members`.
 
 ### Join request status
 
@@ -191,17 +207,29 @@ Common HTTP error codes:
 
 ## WebSocket endpoint
 
-### `GET /ws?roomId=...&displayName=...&ownerToken=...`
+### `GET /ws?roomId=...&displayName=...&ownerToken=...&memberId=...&resumeToken=...`
 
 Joins a room by WebSocket.
 
 Query parameters:
 
-| Parameter     | Required | Meaning                                |
-| ------------- | -------- | -------------------------------------- |
-| `roomId`      | Yes      | Room ID.                               |
-| `displayName` | Yes      | Display name for this connection.      |
-| `ownerToken`  | No       | Owner token returned by `POST /rooms`. |
+| Parameter     | Required | Meaning                                                                  |
+| ------------- | -------- | ------------------------------------------------------------------------ |
+| `roomId`      | Yes      | Room ID.                                                                 |
+| `displayName` | Yes      | Display name for this member.                                            |
+| `ownerToken`  | No       | Owner token returned by `POST /rooms`.                                   |
+| `memberId`    | No       | Existing member ID used for resuming a temporarily disconnected member.  |
+| `resumeToken` | No       | Token used with `memberId` to resume the same member.                    |
+
+If neither `memberId` nor `resumeToken` is specified, the connection is treated as a new join.
+
+If both `memberId` and `resumeToken` are specified, the connection is treated as a resume request.
+
+If only one of `memberId` and `resumeToken` is specified, or if the pair is invalid, expired, or already invalidated by `leave`, the server rejects the request with `invalid_resume`.
+
+A resume request never falls back to a new join.
+
+When a member resumes, the server keeps the same `memberId`. If `displayName` differs from the previous value, the server updates the member's `displayName`.
 
 The server accepts only text messages containing JSON objects.
 
@@ -245,7 +273,7 @@ In `remote` mode:
 
 * Controllers can send data.
 * The receiver cannot send data.
-* If no receiver is active, controller data is ignored.
+* If no receiver is connected, controller data is ignored.
 
 ### `approve`
 
@@ -266,6 +294,24 @@ Approves a pending join request.
 In `broadcast` mode, active members can approve join requests.
 
 In `remote` mode, only the receiver can approve join requests.
+
+### `leave`
+
+Explicitly leaves the room.
+
+```json
+{
+  "type": "leave"
+}
+```
+
+| Field       | Type      | Required | Meaning          |
+| ----------- | --------- | -------- | ---------------- |
+| `type`      | `"leave"` | Yes      | Message type.    |
+
+After receiving `leave`, the server removes the member from the room, invalidates its `resumeToken`, sends `memberLeft`, and closes the WebSocket connection.
+
+A member that has sent `leave` cannot resume with the previous `memberId`.
 
 ### `syncRequest`
 
@@ -327,21 +373,32 @@ Sent when a connection becomes active.
   "roomId": "ABC234",
   "roomMode": "broadcast",
   "memberId": "m_xxxxxxxxxxxx",
+  "resumeToken": "resume_xxxxxxxxxxxx",
+  "resumed": false,
   "displayName": "Alice",
   "role": "member",
   "members": [
     {
       "memberId": "m_xxxxxxxxxxxx",
       "displayName": "Alice",
-      "role": "member"
+      "role": "member",
+      "state": "connected"
     }
   ]
 }
 ```
 
+Sent when a member becomes active.
+
+For a new member, `resumed` is `false`.
+
+For a successfully resumed member, `resumed` is `true` and the same `memberId` is returned.
+
+`resumeToken` is sent only to the joined member. A client should store both `memberId` and `resumeToken` after receiving `joined`.
+
 In `remote` mode, a controller receives an empty `members` array in `joined`.
 
-In `remote` mode, a receiver receives the current active member list in `joined`. This list includes the receiver itself and any controllers that are already connected. Therefore, when a receiver reconnects, it receives the current controller state at the time it becomes active.
+In `remote` mode, a receiver receives the current member list in `joined`.
 
 ### `pending`
 
@@ -402,7 +459,9 @@ A remote room is not closed simply because the receiver disconnects. If controll
 
 ### `memberJoined`
 
-Sent when a member joins.
+Sent when a new member joins.
+
+This event is not sent when an existing member successfully resumes.
 
 ```json
 {
@@ -415,7 +474,8 @@ Sent when a member joins.
     {
       "memberId": "m_xxxxxxxxxxxx",
       "displayName": "Alice",
-      "role": "member"
+      "role": "member",
+      "state": "connected"
     }
   ]
 }
@@ -423,9 +483,47 @@ Sent when a member joins.
 
 In `remote` mode, controller join events are sent only to the receiver.
 
+### `memberUpdated`
+
+Sent when an existing member's state or display name changes.
+
+```json
+{
+  "type": "memberUpdated",
+  "serverTime": 12345.67,
+  "roomId": "ABC234",
+  "memberId": "m_xxxxxxxxxxxx",
+  "displayName": "Alice",
+  "state": "disconnected",
+  "members": [
+    {
+      "memberId": "m_xxxxxxxxxxxx",
+      "displayName": "Alice",
+      "role": "member",
+      "state": "disconnected"
+    }
+  ]
+}
+```
+
+This event is sent when:
+
+- a member becomes temporarily disconnected;
+- a member resumes and becomes `connected` again;
+- a resumed member changes `displayName`.
+
+In `remote` mode, controller update events are sent only to the receiver.
+
 ### `memberLeft`
 
-Sent when a member leaves.
+Sent when a member permanently leaves the room.
+
+This event is sent when:
+
+* the member sends `leave`;
+* the member does not resume before the member-resume timeout expires.
+
+This event is not sent immediately when a WebSocket connection is temporarily lost.
 
 ```json
 {
@@ -495,7 +593,8 @@ Sent periodically when there is no queued data.
     {
       "memberId": "m_xxxxxxxxxxxx",
       "displayName": "Alice",
-      "role": "member"
+      "role": "member",
+      "state": "connected"
     }
   ]
 }
@@ -563,22 +662,23 @@ Sent when the server rejects a message or detects an error.
 
 Common error codes:
 
-| Code                        | Meaning                                             |
-| --------------------------- | --------------------------------------------------- |
-| `room_not_found`            | The requested room does not exist.                  |
-| `unsupported_message`       | The server received a non-text WebSocket message.   |
-| `invalid_json`              | The message was not valid JSON.                     |
-| `invalid_message`           | The message was not a JSON object.                  |
-| `invalid_data_message`      | A `data` message did not include `payload`.         |
-| `unknown_type`              | The message type is not supported.                  |
-| `not_active`                | The connection is not active yet.                   |
-| `not_receiver`              | The operation is allowed only for the receiver.     |
-| `join_request_not_found`    | The join request was not found.                     |
-| `receiver_cannot_send_data` | A receiver attempted to send data in `remote` mode. |
-| `invalid_sync_request`      | `syncRequest` had an invalid timestamp.             |
-| `invalid_sync_report`       | `syncReport` had invalid timestamp fields.          |
-| `invalid_rtt`               | The computed RTT was negative.                      |
-| `receiver_replaced`         | Another receiver connected to the same remote room. |
+| Code                        | Meaning                                                                       |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| `room_not_found`            | The requested room does not exist.                                            |
+| `unsupported_message`       | The server received a non-text WebSocket message.                             |
+| `invalid_json`              | The message was not valid JSON.                                               |
+| `invalid_message`           | The message was not a JSON object.                                            |
+| `invalid_data_message`      | A `data` message did not include `payload`.                                   |
+| `unknown_type`              | The message type is not supported.                                            |
+| `not_active`                | The connection is not active yet.                                             |
+| `not_receiver`              | The operation is allowed only for the receiver.                               |
+| `join_request_not_found`    | The join request was not found.                                               |
+| `receiver_cannot_send_data` | A receiver attempted to send data in `remote` mode.                           |
+| `invalid_sync_request`      | `syncRequest` had an invalid timestamp.                                       |
+| `invalid_sync_report`       | `syncReport` had invalid timestamp fields.                                    |
+| `invalid_rtt`               | The computed RTT was negative.                                                |
+| `receiver_replaced`         | Another receiver connected to the same remote room.                           |
+| `invalid_resume`            | The specified `memberId` and `resumeToken` cannot be used to resume a member. |
 
 ## Data delivery rules
 
@@ -587,7 +687,8 @@ Common error codes:
 * Active members can send `data`.
 * Data is queued by the server.
 * Queued data is sent as `tick` to all active members.
-* `memberJoined`, `memberLeft`, `joinRequest`, `tick`, `heartbeat`, and `roomClosed` are sent to all active members.
+* `memberJoined`, `memberUpdated`, `memberLeft`, `joinRequest`, `tick`, `heartbeat`, and `roomClosed` are sent to connected members.
+* Temporarily disconnected members are included in `members`, but they do not receive events while disconnected.
 
 ### Remote mode
 
@@ -600,7 +701,7 @@ Common error codes:
 * Controller data sent while no receiver is active is not buffered.
 * When a receiver reconnects, only data sent after the receiver becomes active is delivered.
 * Controller connections remain active while no receiver is active.
-* Controller join and leave events are sent only to the receiver.
+* Controller join, update, and leave events are sent only to the receiver.
 * Controller join and leave events that occur while no receiver is active are not buffered.
 * A receiver that reconnects receives the current active member list in `joined`.
 * Approval requests are sent only to the receiver.
@@ -613,19 +714,23 @@ Common error codes:
 A client implementation should:
 
 1. Use `POST /rooms` to create a room if needed.
-2. Build a WebSocket URL using `roomId`, `displayName`, and optionally `ownerToken`.
+2. Build a WebSocket URL using `roomId`, `displayName`, optionally `ownerToken`, and optionally both `memberId` and `resumeToken`.
 3. Send and receive only JSON text messages.
-4. Store `memberId` after receiving `joined`.
-5. Periodically send `syncRequest` if event ordering based on client time is needed.
-6. Reply to `syncResponse` with `syncReport`.
-7. Store `rtt` and `offsetToServerTime` after receiving `syncStatus`.
-8. Send application input as `data` with arbitrary JSON `payload`.
+4. Store `memberId` and `resumeToken` after receiving `joined`.
+5. Reuse the stored `memberId` and `resumeToken` when reconnecting after a temporary disconnection.
+6. Send `leave` when the user explicitly leaves the room.
+7. Discard the stored `memberId` and `resumeToken` after `leave`.
+8. Periodically send `syncRequest` if event ordering based on client time is needed.
+9. Reply to `syncResponse` with `syncReport`.
+10. Store `rtt` and `offsetToServerTime` after receiving `syncStatus`.
+11. Send application input as `data` with arbitrary JSON `payload`.
 
 ## Type summary
 
 ```ts
 type RoomMode = 'broadcast' | 'remote';
 type MemberRole = 'member' | 'receiver' | 'controller';
+type MemberState = 'connected' | 'disconnected';
 type JoinRequestStatus = 'created' | 'updated' | 'expired' | 'canceled';
 ```
 
@@ -634,6 +739,7 @@ type MemberInfo = {
   memberId: string;
   displayName: string;
   role: MemberRole;
+  state: MemberState;
 };
 ```
 
