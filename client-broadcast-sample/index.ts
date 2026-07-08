@@ -3,7 +3,7 @@ import { MEMBER_ROLE, MEMBER_STATE, EVENT_TYPE, JOIN_REQUEST_STATUS, type Create
 import { type RelayEvent } from '../protocol';
 
 // const SERVER_URL = 'http://localhost:3000/cc';
-const SERVER_URL = 'http://lab.takty.net/api/cc';
+const SERVER_URL = 'https://lab.takty.net/api/cc';
 const FLASH_MS   = 30;
 
 type GamePayload = {

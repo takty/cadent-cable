@@ -7,7 +7,7 @@ declare const QRCode: new (
 ) => unknown;
 
 // const SERVER_URL     = 'http://localhost:3000/cc';
-const SERVER_URL     = 'http://lab.takty.net/api/cc';
+const SERVER_URL     = 'https://lab.takty.net/api/cc';
 const MOVE_SPEED     = 160; // px/sec
 const CHARACTER_SIZE = 28;
 
