@@ -43,7 +43,7 @@ setupButton('btn-b', 'b');
 window.addEventListener('blur', releaseAllButtons);
 window.addEventListener('pagehide', () => {
 	releaseAllButtons();
-	conn?.disconnect();
+	conn?.leave();
 });
 
 connect();
@@ -64,7 +64,7 @@ async function connect() {
 			onEvent    : handleRelayEvent,
 		} satisfies RelayConnectionOptions<RemotePayload>);
 
-		await conn.connect();
+		await conn.join();
 	} catch (e) {
 		setStatus(errorMessage(e));
 	}

@@ -68,7 +68,7 @@ tapButton.addEventListener('pointerdown', () => {
 });
 
 leaveButton.addEventListener('click', () => {
-	conn?.disconnect();
+	conn?.leave();
 	conn = null;
 	myMemberId = '';
 	members.clear();
@@ -82,7 +82,7 @@ async function connect(options: { ownerToken?: string }) {
 	if (!roomId) throw new Error('Room ID is empty.');
 	if (!displayName) throw new Error('Display name is empty.');
 
-	conn?.disconnect();
+	conn?.leave();
 	members.clear();
 	renderMembers();
 	setConnected(false);
@@ -97,7 +97,7 @@ async function connect(options: { ownerToken?: string }) {
 		syncIntervalMs: 3000,
 		onEvent       : handleRelayEvent,
 	} satisfies RelayConnectionOptions<GamePayload>);
-	await conn.connect();
+	await conn.join();
 }
 
 function handleRelayEvent(ev: RelayEvent<GamePayload>) {

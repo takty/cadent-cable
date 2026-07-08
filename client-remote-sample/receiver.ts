@@ -102,7 +102,7 @@ async function startReceiver() {
 		onEvent    : handleRelayEvent,
 	} satisfies RelayConnectionOptions<RemotePayload>);
 
-	await conn.connect();
+	await conn.join();
 
 	createButton.disabled = true;
 	leaveButton.disabled  = false;
@@ -111,7 +111,7 @@ async function startReceiver() {
 }
 
 function stopReceiver() {
-	conn?.disconnect();
+	conn?.leave();
 	conn = null;
 
 	roomId     = '';
