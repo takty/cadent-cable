@@ -428,7 +428,6 @@ function activateConnection(room: Room, ws: WS): void {
 		if (prev && prev !== member) {
 			if (prev.ws) {
 				sendError(prev.ws, 'receiver_replaced', 'Another receiver has connected.');
-				prev.ws.close(1000, 'receiver_replaced');
 			}
 			removeMember(room, prev, 'receiver_replaced');
 		}

@@ -2,7 +2,7 @@ import { RelayConnection, type RelayConnectionOptions } from '../client';
 import { EVENT_TYPE, type RelayEvent } from '../protocol';
 
 // const SERVER_URL   = 'http://localhost:3000/cc';
-const SERVER_URL   = 'http://10.13.106.1/api/cc';
+const SERVER_URL   = 'http://lab.takty.net/api/cc';
 const DISPLAY_NAME = 'controller';
 
 type ButtonName = 'up' | 'down' | 'left' | 'right' | 'a' | 'b';

@@ -1,5 +1,5 @@
 import { createRoom, RelayConnection, type RelayConnectionOptions } from '../client';
-import { EVENT_TYPE, MEMBER_ROLE, ROOM_MODE, type CreateRoomOptions, type MemberInfo, type QueuedMessage, type RelayEvent } from '../protocol';
+import { EVENT_TYPE, MEMBER_ROLE, MEMBER_STATE, ROOM_MODE, type CreateRoomOptions, type MemberInfo, type QueuedMessage, type RelayEvent } from '../protocol';
 
 declare const QRCode: new (
 	el: HTMLElement,
@@ -7,7 +7,7 @@ declare const QRCode: new (
 ) => unknown;
 
 // const SERVER_URL     = 'http://localhost:3000/cc';
-const SERVER_URL     = 'http://10.13.106.1/api/cc';
+const SERVER_URL     = 'http://lab.takty.net/api/cc';
 const MOVE_SPEED     = 160; // px/sec
 const CHARACTER_SIZE = 28;
 
@@ -217,9 +217,12 @@ function setCharactersFromMembers(list: MemberInfo[]) {
 	for (const m of list) {
 		if (m.role !== MEMBER_ROLE.controller) continue;
 		controllerIds.add(m.memberId);
-		if (!characters.has(m.memberId)) createCharacter(m.memberId);
+		const c = characters.get(m.memberId) ?? createCharacter(m.memberId);
+		if (m.state === MEMBER_STATE.disconnected) {
+			c.buttons.clear();
+			renderCharacter(c);
+		}
 	}
-
 	for (const id of [...characters.keys()]) {
 		if (!controllerIds.has(id)) deleteCharacter(id);
 	}

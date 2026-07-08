@@ -35,10 +35,10 @@ A temporarily disconnected member remains in the room during the server's member
 
 `roomMode` controls how events are delivered.
 
-| Value       | Meaning                                            |
-| ----------- | -------------------------------------------------- |
-| `broadcast` | Events are sent to all active members in the room. |
-| `remote`    | Controller events are sent only to the receiver.   |
+| Value       | Meaning                                               |
+| ----------- | ----------------------------------------------------- |
+| `broadcast` | Events are sent to all connected members in the room. |
+| `remote`    | Controller events are sent only to the receiver.      |
 
 ### Member role
 
@@ -56,7 +56,7 @@ In `remote` mode:
 
 * A client that joins with the correct `ownerToken` becomes `receiver`.
 * Other clients become `controller`.
-* At most one receiver is active at a time.
+* At most one receiver is connected at a time.
 * If a new receiver connects while another receiver is active, the previous receiver is closed.
 * If the receiver disconnects, the room remains open while other active members remain.
 * The receiver can reconnect later by using the same `ownerToken`.
@@ -229,6 +229,8 @@ If only one of `memberId` and `resumeToken` is specified, or if the pair is inva
 
 A resume request never falls back to a new join.
 
+In `remote` mode, a receiver resume request must also include the correct `ownerToken`. Controller resume requests do not use `ownerToken`.
+
 When a member resumes, the server keeps the same `memberId`. If `displayName` differs from the previous value, the server updates the member's `displayName`.
 
 The server accepts only text messages containing JSON objects.
@@ -273,7 +275,7 @@ In `remote` mode:
 
 * Controllers can send data.
 * The receiver cannot send data.
-* If no receiver is connected, controller data is ignored.
+* If no receiver is connected, controller data is discarded.
 
 ### `approve`
 
@@ -698,13 +700,13 @@ Common error codes:
 * Controllers can send `data`.
 * The receiver cannot send `data`.
 * Controller data is sent as `tick` only to the receiver.
-* If no receiver is active, controller data is discarded.
+* If no receiver is connected, controller data is discarded.
 * Controller data sent while no receiver is active is not buffered.
 * When a receiver reconnects, only data sent after the receiver becomes active is delivered.
 * Controller connections remain active while no receiver is active.
 * Controller join, update, and leave events are sent only to the receiver.
 * Controller join and leave events that occur while no receiver is active are not buffered.
-* A receiver that reconnects receives the current active member list in `joined`.
+* A receiver that resumes receives the current member list in `joined`.
 * Approval requests are sent only to the receiver.
 * If a new receiver connects while another receiver is active, the previous receiver is closed with `receiver_replaced`.
 * The room is not closed simply because the receiver disconnects.

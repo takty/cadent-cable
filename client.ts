@@ -65,8 +65,8 @@ export class RelayConnection<TPayload = unknown> {
 		this.roomId          = normalizeId(options.roomId);
 		this.displayName     = normalizeDisplayName(options.displayName);
 		this.ownerToken      = options.ownerToken;
-		this.memberId        = options.memberId ?? null;
-		this.resumeToken     = options.resumeToken ?? null;
+		this.memberId        = options.memberId && options.memberId !== '' ? options.memberId : null;
+		this.resumeToken     = options.resumeToken && options.resumeToken !== '' ? options.resumeToken : null;
 		this.#runtime        = options.runtime ?? browserRuntime;
 		this.#onEvent        = options.onEvent ?? (() => {});
 		this.#autoSync       = options.autoSync ?? true;
