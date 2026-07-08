@@ -48,25 +48,25 @@ A temporarily disconnected member remains in the room during the server's member
 | `receiver`   | The owner-side receiver in `remote` mode. |
 | `controller` | A controller client in `remote` mode.     |
 
-In `broadcast` mode, all active clients are `member`.
+In `broadcast` mode, all connected clients are `member`.
 
-In `broadcast` mode, a client with the correct `ownerToken` is still a `member`, but it can become active without approval.
+In `broadcast` mode, a client with the correct `ownerToken` is still a `member`, but it can become connected without approval.
 
 In `remote` mode:
 
 * A client that joins with the correct `ownerToken` becomes `receiver`.
 * Other clients become `controller`.
 * At most one receiver is connected at a time.
-* If a new receiver connects while another receiver is active, the previous receiver is closed.
-* If the receiver disconnects, the room remains open while other active members remain.
+* If a new receiver connects while another receiver is connected, the previous receiver is closed.
+* If the receiver disconnects, the room remains open while other members remain.
 * The receiver can reconnect later by using the same `ownerToken`.
-* Controllers remain connected while no receiver is active.
+* Controllers remain connected while no receiver is connected.
 
 ### Member state
 
-| Value          | Meaning                                                                 |
-| -------------- | ----------------------------------------------------------------------- |
-| `connected`    | The member currently has an active WebSocket connection.                |
+| Value          | Meaning                                                                  |
+| -------------- | ------------------------------------------------------------------------ |
+| `connected`    | The member currently has a connected WebSocket connection.               |
 | `disconnected` | The member is temporarily disconnected but can still resume in the room. |
 
 A `disconnected` member is still treated as a member of the room until the member-resume timeout expires.
@@ -269,7 +269,7 @@ Sends application payload data.
 
 If `clientTime` is present and a valid clock offset is available, the server estimates `eventTime` in server monotonic time from `clientTime`; otherwise, `receivedAt` is used as `eventTime`.
 
-In `broadcast` mode, data from active members is relayed to the room.
+In `broadcast` mode, data from connected members is relayed to the room.
 
 In `remote` mode:
 
@@ -293,7 +293,7 @@ Approves a pending join request.
 | `type`      | `"approve"` | Yes      | Message type.    |
 | `requestId` | `string`    | Yes      | Join request ID. |
 
-In `broadcast` mode, active members can approve join requests.
+In `broadcast` mode, connected members can approve join requests.
 
 In `remote` mode, only the receiver can approve join requests.
 
@@ -366,7 +366,7 @@ The server keeps the best result with the lowest RTT for each connection.
 
 ### `joined`
 
-Sent when a connection becomes active.
+Sent when a connection becomes connected.
 
 ```json
 {
@@ -390,7 +390,7 @@ Sent when a connection becomes active.
 }
 ```
 
-Sent when a member becomes active.
+Sent when a member becomes connected.
 
 For a new member, `resumed` is `false`.
 
@@ -577,7 +577,7 @@ Each item in `messages` has the following fields:
 
 Queued messages are sorted by `eventTime`, then by `receivedAt`.
 
-In `broadcast` mode, `tick` is sent to all active members.
+In `broadcast` mode, `tick` is sent to all connected members.
 
 In `remote` mode, `tick` is sent only to the receiver.
 
@@ -617,7 +617,7 @@ Sent when a room is closed.
 }
 ```
 
-After this message, the server closes active WebSocket connections in the room.
+After this message, the server closes connected WebSocket connections in the room.
 
 ### `syncResponse`
 
@@ -689,7 +689,7 @@ Common error codes:
 
 * Active members can send `data`.
 * Data is queued by the server.
-* Queued data is sent as `tick` to all active members.
+* Queued data is sent as `tick` to all connected members.
 * `memberJoined`, `memberUpdated`, `memberLeft`, `joinRequest`, `tick`, `heartbeat`, and `roomClosed` are sent to connected members.
 * Temporarily disconnected members are included in `members`, but they do not receive events while disconnected.
 
@@ -701,14 +701,14 @@ Common error codes:
 * The receiver cannot send `data`.
 * Controller data is sent as `tick` only to the receiver.
 * If no receiver is connected, controller data is discarded.
-* Controller data sent while no receiver is active is not buffered.
-* When a receiver reconnects, only data sent after the receiver becomes active is delivered.
-* Controller connections remain active while no receiver is active.
+* Controller data sent while no receiver is connected is not buffered.
+* When a receiver reconnects, only data sent after the receiver becomes connected is delivered.
+* Controller connections remain connected while no receiver is connected.
 * Controller join, update, and leave events are sent only to the receiver.
-* Controller join and leave events that occur while no receiver is active are not buffered.
+* Controller join and leave events that occur while no receiver is connected are not buffered.
 * A receiver that resumes receives the current member list in `joined`.
 * Approval requests are sent only to the receiver.
-* If a new receiver connects while another receiver is active, the previous receiver is closed with `receiver_replaced`.
+* If a new receiver connects while another receiver is connected, the previous receiver is closed with `receiver_replaced`.
 * The room is not closed simply because the receiver disconnects.
 * If all members leave, the room may be closed after the server's empty-room timeout.
 

@@ -594,7 +594,12 @@ function handleApproval(ws: WS, msg: any): void {
 		sendError(ws, 'room_not_found', 'Room not found.');
 		return;
 	}
-	if (room.roomMode === ROOM_MODE.remote && ws.data.role !== MEMBER_ROLE.receiver) {
+	const member = getCurrentMember(room, ws);
+	if (!member) {
+		sendError(ws, 'not_active', 'Only active members can approve join requests.');
+		return;
+	}
+	if (room.roomMode === ROOM_MODE.remote && member.role !== MEMBER_ROLE.receiver) {
 		sendError(ws, 'not_receiver', 'Only the receiver can approve join requests in remote mode.');
 		return;
 	}
@@ -606,7 +611,7 @@ function handleApproval(ws: WS, msg: any): void {
 		sendError(ws, 'join_request_not_found', 'Join request not found.');
 		return;
 	}
-	req.approvals.add(ws.data.memberId);
+	req.approvals.add(member.memberId);
 
 	dispatchEvent(room, joinRequestMessage(room, req, JOIN_REQUEST_STATUS.updated));
 
@@ -707,8 +712,13 @@ function handleDataMessage(ws: WS, msg: any): void {
 		sendError(ws, 'room_not_found', 'Room not found.');
 		return;
 	}
+	const member = getCurrentMember(room, ws);
+	if (!member) {
+		sendError(ws, 'not_active', 'Only active members can send game data.');
+		return;
+	}
 	if (room.roomMode === ROOM_MODE.remote) {
-		if (ws.data.role === MEMBER_ROLE.receiver) {
+		if (member.role === MEMBER_ROLE.receiver) {
 			sendError(ws, 'receiver_cannot_send_data', 'Receiver cannot send data in remote mode.');
 			return;
 		}
@@ -732,13 +742,24 @@ function handleDataMessage(ws: WS, msg: any): void {
 		receivedAt + EVENT_TIME_MAX_FUTURE_MS
 	);
 	room.queue.push({
-		from       : ws.data.memberId,
-		displayName: ws.data.displayName,
+		from       : member.memberId,
+		displayName: member.displayName,
 		clientTime,
 		eventTime,
 		receivedAt,
 		payload    : msg.payload,
 	} satisfies QueuedMessage);
+}
+
+function getCurrentMember(room: Room, ws: WS): Member | undefined {
+	if (ws.data.state !== 'active' || !ws.data.memberId) return undefined;
+
+	const member = room.members.get(ws.data.memberId);
+	if (!member) return undefined;
+	if (member.state !== MEMBER_STATE.connected) return undefined;
+	if (member.ws !== ws) return undefined;
+
+	return member;
 }
 
 function flushRoomQueue(room: Room): void {
