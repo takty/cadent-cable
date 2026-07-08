@@ -12,7 +12,7 @@ A room is an isolated communication group identified by `roomId`.
 
 A room is not closed simply because a receiver disconnects. A room may be closed when it becomes empty and the server's empty-room timeout expires, or when the server explicitly closes it for another reason.
 
-A room is considered empty when it has no active members. Pending connections do not prevent empty-room timeout.
+A room is considered empty when it has no members. Temporarily disconnected members still count as members until the member-resume timeout expires. Pending connections do not prevent empty-room timeout.
 
 ### Member
 
@@ -679,6 +679,7 @@ Common error codes:
 | `invalid_rtt`               | The computed RTT was negative.                                                |
 | `receiver_replaced`         | Another receiver connected to the same remote room.                           |
 | `invalid_resume`            | The specified `memberId` and `resumeToken` cannot be used to resume a member. |
+| `resumed_elsewhere`         | The same member resumed with another WebSocket connection.                    |
 
 ## Data delivery rules
 

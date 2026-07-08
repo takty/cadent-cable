@@ -148,6 +148,7 @@ function handleRelayEvent(ev: RelayEvent<RemotePayload>) {
 			setCharactersFromMembers(ev.members as MemberInfo[]);
 			break;
 		case EVENT_TYPE.memberJoined:
+		case EVENT_TYPE.memberUpdated:
 			setCharactersFromMembers(ev.members as MemberInfo[]);
 			break;
 		case EVENT_TYPE.memberLeft:

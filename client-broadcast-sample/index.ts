@@ -1,5 +1,5 @@
 import { createRoom, RelayConnection, type RelayConnectionOptions } from '../client';
-import { EVENT_TYPE, JOIN_REQUEST_STATUS, MEMBER_ROLE, type CreateRoomOptions, type MemberInfo, type QueuedMessage } from '../protocol';
+import { MEMBER_ROLE, MEMBER_STATE, EVENT_TYPE, JOIN_REQUEST_STATUS, type CreateRoomOptions, type MemberInfo, type QueuedMessage } from '../protocol';
 import { type RelayEvent } from '../protocol';
 
 // const SERVER_URL = 'http://localhost:3000/cc';
@@ -133,6 +133,7 @@ function handleRelayEvent(ev: RelayEvent<GamePayload>) {
 			setConnected(false);
 			break;
 		case EVENT_TYPE.memberJoined:
+		case EVENT_TYPE.memberUpdated:
 			setMembers(ev.members as MemberInfo[]);
 			break;
 		case EVENT_TYPE.memberLeft:
@@ -148,7 +149,8 @@ function handleRelayEvent(ev: RelayEvent<GamePayload>) {
 					members.set(msg.from, {
 						memberId   : msg.from,
 						displayName: msg.displayName,
-						role       : MEMBER_ROLE.member
+						role       : MEMBER_ROLE.member,
+						state      : MEMBER_STATE.connected,
 					});
 				}
 				if (msg.payload?.kind === 'tap') flashMember(msg.from);

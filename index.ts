@@ -336,9 +336,6 @@ function handleWebSocketUpgrade(req: Request, server: Server<WSData>, url: URL):
 		if (member.role === MEMBER_ROLE.receiver && ownerToken !== room.ownerToken) {
 			return jsonResponse({ ok: false, error: 'invalid_resume' }, CORS_HEADERS, 400);
 		}
-		if (member.state !== MEMBER_STATE.disconnected) {
-			return jsonResponse({ ok: false, error: 'invalid_resume' }, CORS_HEADERS, 400);
-		}
 		role          = member.role;
 		state         = 'active';
 		wsMemberId    = member.memberId;
@@ -408,9 +405,16 @@ function activateConnection(room: Room, ws: WS): void {
 		member.resumeTimer = undefined;
 	}
 
+	const oldWs = resumed && member.ws !== ws ? member.ws : undefined;
+
 	member.displayName = ws.data.displayName;
 	member.state       = MEMBER_STATE.connected;
 	member.ws          = ws;
+
+	if (oldWs) {
+		sendError(oldWs, 'resumed_elsewhere', 'This member has resumed with another connection.');
+		oldWs.close(1000, 'resumed_elsewhere');
+	}
 
 	ws.data.memberId    = member.memberId;
 	ws.data.resumeToken = member.resumeToken;
@@ -422,11 +426,11 @@ function activateConnection(room: Room, ws: WS): void {
 		room.receiver = member;
 
 		if (prev && prev !== member) {
-			removeMember(room, prev, 'receiver_replaced');
 			if (prev.ws) {
 				sendError(prev.ws, 'receiver_replaced', 'Another receiver has connected.');
 				prev.ws.close(1000, 'receiver_replaced');
 			}
+			removeMember(room, prev, 'receiver_replaced');
 		}
 	}
 
@@ -450,6 +454,11 @@ function activateConnection(room: Room, ws: WS): void {
 	if (resumed) {
 		if (oldState !== member.state || oldDisplayName !== member.displayName) {
 			dispatchEvent(room, memberUpdatedMessage(room, member));
+		}
+		if (room.roomMode !== ROOM_MODE.remote || member.role === MEMBER_ROLE.receiver) {
+			for (const req of room.pending.values()) {
+				send(ws, joinRequestMessage(room, req, JOIN_REQUEST_STATUS.created));
+			}
 		}
 		return;
 	}
