@@ -217,7 +217,6 @@ function close(ws: ServerWebSocket<WSData>) {
 		markMemberDisconnected(room, member);
 		return;
 	}
-
 	if (ws.data.requestId) {
 		cancelJoinRequest(room, ws);
 	}
@@ -395,8 +394,8 @@ function createRoom(roomId: string, roomMode: RoomMode, approvalRatio: number): 
 function activateConnection(room: Room, ws: WS): void {
 	clearEmptyRoomDeletion(room);
 
-	const resumed = ws.data.memberId !== undefined && room.members.has(ws.data.memberId);
-	const oldState = resumed ? room.members.get(ws.data.memberId as string)?.state : undefined;
+	const resumed        = ws.data.memberId !== undefined && room.members.has(ws.data.memberId);
+	const oldState       = resumed ? room.members.get(ws.data.memberId as string)?.state : undefined;
 	const oldDisplayName = resumed ? room.members.get(ws.data.memberId as string)?.displayName : undefined;
 
 	const member = resumed
@@ -407,7 +406,6 @@ function activateConnection(room: Room, ws: WS): void {
 		clearTimeout(member.resumeTimer);
 		member.resumeTimer = undefined;
 	}
-
 	const oldWs = resumed && member.ws !== ws ? member.ws : undefined;
 
 	member.displayName = ws.data.displayName;
@@ -418,7 +416,6 @@ function activateConnection(room: Room, ws: WS): void {
 		sendError(oldWs, 'resumed_elsewhere', 'This member has resumed with another connection.');
 		oldWs.close(1000, 'resumed_elsewhere');
 	}
-
 	ws.data.memberId    = member.memberId;
 	ws.data.resumeToken = member.resumeToken;
 	ws.data.state       = 'active';
@@ -436,7 +433,6 @@ function activateConnection(room: Room, ws: WS): void {
 		}
 		room.receiver = member;
 	}
-
 	const members = room.roomMode === ROOM_MODE.remote && member.role === MEMBER_ROLE.controller
 		? []
 		: getMembers(room);
@@ -465,7 +461,6 @@ function activateConnection(room: Room, ws: WS): void {
 		}
 		return;
 	}
-
 	if (room.roomMode === ROOM_MODE.remote) {
 		if (member.role === MEMBER_ROLE.controller) {
 			sendToReceiver(room, {
@@ -484,7 +479,6 @@ function activateConnection(room: Room, ws: WS): void {
 		}
 		return;
 	}
-
 	sendToRoom(room, {
 		type       : EVENT_TYPE.memberJoined,
 		serverTime : performance.now(),
@@ -607,9 +601,8 @@ function handleApproval(ws: WS, msg: any): void {
 		sendError(ws, 'not_receiver', 'Only the receiver can approve join requests in remote mode.');
 		return;
 	}
-
-	const requestId = typeof msg.requestId === 'string' ? msg.requestId : '';
-	const req       = room?.pending.get(requestId);
+	const reqId = typeof msg.requestId === 'string' ? msg.requestId : '';
+	const req   = room?.pending.get(reqId);
 
 	if (!req) {
 		sendError(ws, 'join_request_not_found', 'Join request not found.');
@@ -624,27 +617,27 @@ function handleApproval(ws: WS, msg: any): void {
 	}
 }
 
-function acceptJoinRequest(room: Room, requestId: string): void {
-	const req = room.pending.get(requestId);
+function acceptJoinRequest(room: Room, reqId: string): void {
+	const req = room.pending.get(reqId);
 	if (!req) return;
 
 	clearTimeout(req.timer);
-	room.pending.delete(requestId);
+	room.pending.delete(reqId);
 	activateConnection(room, req.ws);
 }
 
-function rejectJoinRequest(room: Room, requestId: string, reason: string): void {
-	const req = room.pending.get(requestId);
+function rejectJoinRequest(room: Room, reqId: string, reason: string): void {
+	const req = room.pending.get(reqId);
 	if (!req) return;
 
 	clearTimeout(req.timer);
-	room.pending.delete(requestId);
+	room.pending.delete(reqId);
 
 	send(req.ws, {
 		type      : EVENT_TYPE.joinRejected,
 		serverTime: performance.now(),
 		roomId    : room.roomId,
-		requestId,
+		requestId : reqId,
 		reason,
 	} satisfies RelayEvent);
 	req.ws.close(1008, `join_rejected:${reason}`);
@@ -661,17 +654,14 @@ function handleLeave(ws: WS): void {
 		ws.close(1000, 'leave');
 		return;
 	}
-
 	if (ws.data.state !== 'active' || !ws.data.memberId) {
 		ws.close(1000, 'leave');
 		return;
 	}
-
 	const member = room.members.get(ws.data.memberId);
 	if (member && member.ws === ws) {
 		removeMember(room, member, 'leave');
 	}
-
 	ws.close(1000, 'leave');
 }
 
@@ -680,26 +670,21 @@ function handleCloseRoom(ws: WS): void {
 		sendError(ws, 'not_active', 'Only an active owner can close the room.');
 		return;
 	}
-
 	const room = rooms.get(ws.data.roomId);
 	if (!room) {
 		sendError(ws, 'room_not_found', 'Room not found.');
 		return;
 	}
-
 	const member = getCurrentMember(room, ws);
 	if (!member) {
 		sendError(ws, 'not_active', 'Only an active owner can close the room.');
 		return;
 	}
-
 	const canClose = ws.data.isOwner && (room.roomMode !== ROOM_MODE.remote || member.role === MEMBER_ROLE.receiver);
-
 	if (!canClose) {
 		sendError(ws, 'not_owner', 'Only the room owner can close the room.');
 		return;
 	}
-
 	deleteRoom(room.roomId, 'owner_closed');
 }
 
@@ -708,8 +693,7 @@ function removeMember(room: Room, member: Member, reason: string): void {
 		clearTimeout(member.resumeTimer);
 		member.resumeTimer = undefined;
 	}
-
-	const ws = member.ws;
+	const ws  = member.ws;
 	member.ws = undefined;
 
 	if (room.receiver === member) {
@@ -728,7 +712,6 @@ function removeMember(room: Room, member: Member, reason: string): void {
 	if (ws && reason !== 'leave') {
 		ws.close(1000, reason);
 	}
-
 	maybeScheduleEmptyRoomDeletion(room);
 }
 
@@ -805,7 +788,6 @@ function flushRoomQueue(room: Room): void {
 	} else {
 		if (getConnectedMembers(room).length === 0) return;
 	}
-
 	const messages = room.queue.splice(0, room.queue.length) as QueuedMessage[];
 	messages.sort((a, b) => a.eventTime - b.eventTime || a.receivedAt - b.receivedAt);
 	room.tickSeq += 1;
@@ -915,7 +897,6 @@ function deleteRoom(roomId: string, reason: string): void {
 	for (const member of room.members.values()) {
 		if (member.resumeTimer) clearTimeout(member.resumeTimer);
 	}
-
 	for (const req of room.pending.values()) {
 		clearTimeout(req.timer);
 		send(req.ws, {
@@ -926,7 +907,6 @@ function deleteRoom(roomId: string, reason: string): void {
 		} satisfies RelayEvent);
 		req.ws.close(1001, 'room_closed');
 	}
-
 	sendToRoom(room, {
 		type      : EVENT_TYPE.roomClosed,
 		serverTime: performance.now(),
@@ -937,7 +917,6 @@ function deleteRoom(roomId: string, reason: string): void {
 	for (const member of room.members.values()) {
 		member.ws?.close(1001, 'room_closed');
 	}
-
 	rooms.delete(roomId);
 }
 

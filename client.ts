@@ -83,7 +83,6 @@ export class RelayConnection<TPayload = unknown> {
 		if ((this.memberId === null) !== (this.resumeToken === null)) {
 			return Promise.reject(new Error('Both memberId and resumeToken are required to resume.'));
 		}
-
 		return new Promise((resolve, reject) => {
 			const url = buildWebSocketUrl(this.serverUrl, ROUTE.ws, {
 				roomId     : this.roomId,
@@ -120,7 +119,6 @@ export class RelayConnection<TPayload = unknown> {
 		if (ws && ws.readyState === CC_WS_OPEN) {
 			ws.send(JSON.stringify(makeLeaveMessage()));
 		}
-
 		this.memberId = null;
 		this.resumeToken = null;
 
