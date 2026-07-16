@@ -230,6 +230,10 @@ function markMemberDisconnected(room: Room, member: Member): void {
 	member.resumeTimer = setTimeout(() => {
 		member.resumeTimer = undefined;
 		if (member.state === MEMBER_STATE.disconnected) {
+			if (room.roomMode === ROOM_MODE.remote && member.role === MEMBER_ROLE.receiver) {
+				deleteRoom(room.roomId, 'receiver_timeout');
+				return;
+			}
 			removeMember(room, member, 'resume_timeout');
 		}
 	}, MEMBER_RESUME_TTL_MS);

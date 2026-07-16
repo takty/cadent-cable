@@ -10,7 +10,9 @@ Cadent Cable is a room-based WebSocket relay system. A client creates or joins a
 
 A room is an isolated communication group identified by `roomId`.
 
-A room is not closed simply because a receiver disconnects. A room may be closed when it becomes empty and the server's empty-room timeout expires, or when the server explicitly closes it for another reason.
+In `remote` mode, a room is not closed immediately when its receiver disconnects. The room remains open during the member-resume timeout. If the receiver does not resume before the timeout expires, the server closes the room.
+
+A room may also be closed when it becomes empty and the server's empty-room timeout expires, or when its owner explicitly closes it.
 
 A room is considered empty when it has no members. Temporarily disconnected members still count as members until the member-resume timeout expires. Pending connections do not prevent empty-room timeout.
 
@@ -58,9 +60,10 @@ In `remote` mode:
 * Other clients become `controller`.
 * At most one receiver is connected at a time.
 * If a new receiver connects while another receiver is connected, the previous receiver is closed.
-* If the receiver disconnects, the room remains open while other members remain.
-* The receiver can reconnect later by using the same `ownerToken`.
-* Controllers remain connected while no receiver is connected.
+* If the receiver disconnects, the room remains open during the member-resume timeout.
+* The receiver can resume by using the same `memberId`, `resumeToken`, and `ownerToken`.
+* Controllers remain connected while the server waits for the receiver to resume.
+* If the receiver does not resume before the timeout expires, the server closes the room with reason `receiver_timeout`.
 
 ### Member state
 
@@ -638,10 +641,11 @@ Sent when a room is closed.
 }
 ```
 
-| `reason` value  | Meaning                                    |
-| --------------- | ------------------------------------------ |
-| `empty_timeout` | The room was closed after remaining empty. |
-| `owner_closed`  | The owner explicitly closed the room.      |
+| `reason` value     | Meaning                                                 |
+| ------------------ | ------------------------------------------------------- |
+| `empty_timeout`    | The room was closed after remaining empty.              |
+| `owner_closed`     | The owner explicitly closed the room.                   |
+| `receiver_timeout` | The receiver did not resume before the timeout expired. |
 
 After this message, the server closes connected WebSocket connections in the room and deletes the room.
 
@@ -736,7 +740,9 @@ Common error codes:
 * A receiver that resumes receives the current member list in `joined`.
 * Approval requests are sent only to the receiver.
 * If a new receiver connects while another receiver is connected, the previous receiver is closed with `receiver_replaced`.
-* The room is not closed simply because the receiver disconnects.
+* If the receiver disconnects, the room remains open during the member-resume timeout.
+* If the receiver resumes before the timeout expires, the room continues normally.
+* If the receiver does not resume before the timeout expires, the room is closed with reason `receiver_timeout`.
 * If all members leave, the room may be closed after the server's empty-room timeout.
 
 ## Client implementation notes
@@ -750,10 +756,11 @@ A client implementation should:
 5. Reuse the stored `memberId` and `resumeToken` when reconnecting after a temporary disconnection.
 6. Send `leave` when the user explicitly leaves the room.
 7. Discard the stored `memberId` and `resumeToken` after `leave`.
-8. Periodically send `syncRequest` if event ordering based on client time is needed.
-9. Reply to `syncResponse` with `syncReport`.
-10. Store `rtt` and `offsetToServerTime` after receiving `syncStatus`.
-11. Send application input as `data` with arbitrary JSON `payload`.
+8. If the client owns the room, send `closeRoom` when explicitly ending the room.
+9. Periodically send `syncRequest` if event ordering based on client time is needed.
+10. Reply to `syncResponse` with `syncReport`.
+11. Store `rtt` and `offsetToServerTime` after receiving `syncStatus`.
+12. Send application input as `data` with arbitrary JSON `payload`.
 
 ## Type summary
 
