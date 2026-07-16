@@ -337,7 +337,7 @@ Only an active owner-side connection can send `closeRoom`.
 - In `broadcast` mode, the connection must be authenticated with the correct `ownerToken`.
 - In `remote` mode, the connection must be the receiver.
 
-After receiving a valid `closeRoom`, the server sends `roomClosed` with reason `owner_closed` to all connected members, closes their WebSocket connections, and deletes the room.
+After receiving a valid `closeRoom`, the server sends `roomClosed` with reason `owner_closed` to all connected connections in the room, closes their WebSocket connections, and deletes the room.
 
 ### `syncRequest`
 
