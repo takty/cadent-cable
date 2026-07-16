@@ -10,7 +10,7 @@
  * - Approval rooms require OK votes from active participants
  *
  * @author Takuto Yanagida
- * @version 2026-07-08
+ * @version 2026-07-16
  */
 
 import type { Server, ServerWebSocket } from 'bun';
@@ -73,6 +73,7 @@ type WSData = {
 	displayName        : string;
 	state              : ConnState;
 	role               : MemberRole;
+	isOwner            : boolean;
 	requestId?         : string;
 	offsetToServerTime?: number;
 	rtt?               : number;
@@ -198,6 +199,7 @@ function message(ws: ServerWebSocket<WSData>, raw: string | Buffer<ArrayBuffer>)
 		case EVENT_TYPE.data       : handleDataMessage(ws, msg); break;
 		case EVENT_TYPE.approve    : handleApproval(ws, msg); break;
 		case EVENT_TYPE.leave      : handleLeave(ws); break;
+		case EVENT_TYPE.closeRoom  : handleCloseRoom(ws); break;
 		case EVENT_TYPE.syncRequest: handleSync(ws, msg); break;
 		case EVENT_TYPE.syncReport : handleSyncResult(ws, msg); break;
 		default                    : sendError(ws, 'unknown_type', `Unknown message type: ${String(msg.type)}`);
@@ -320,6 +322,7 @@ function handleWebSocketUpgrade(req: Request, server: Server<WSData>, url: URL):
 	if (displayNameError) return jsonResponse({ ok: false, error: displayNameError }, CORS_HEADERS, 400);
 
 	const isResume = memberId !== '' || resumeToken !== '';
+	const isOwner  = ownerToken !== '' && ownerToken === room.ownerToken;
 	let role         : MemberRole;
 	let state        : ConnState;
 	let wsMemberId   : string | undefined;
@@ -341,7 +344,6 @@ function handleWebSocketUpgrade(req: Request, server: Server<WSData>, url: URL):
 		wsMemberId    = member.memberId;
 		wsResumeToken = member.resumeToken;
 	} else {
-		const isOwner    = ownerToken !== '' && ownerToken === room.ownerToken;
 		const isReceiver = room.roomMode === ROOM_MODE.remote && isOwner;
 
 		role = room.roomMode === ROOM_MODE.remote
@@ -360,6 +362,7 @@ function handleWebSocketUpgrade(req: Request, server: Server<WSData>, url: URL):
 			displayName,
 			state,
 			role,
+			isOwner,
 		},
 	});
 	if (!ok) return jsonResponse({ ok: false, error: 'websocket_upgrade_failed' }, CORS_HEADERS, 500);
@@ -670,6 +673,34 @@ function handleLeave(ws: WS): void {
 	}
 
 	ws.close(1000, 'leave');
+}
+
+function handleCloseRoom(ws: WS): void {
+	if (ws.data.state !== 'active' || !ws.data.memberId) {
+		sendError(ws, 'not_active', 'Only an active owner can close the room.');
+		return;
+	}
+
+	const room = rooms.get(ws.data.roomId);
+	if (!room) {
+		sendError(ws, 'room_not_found', 'Room not found.');
+		return;
+	}
+
+	const member = getCurrentMember(room, ws);
+	if (!member) {
+		sendError(ws, 'not_active', 'Only an active owner can close the room.');
+		return;
+	}
+
+	const canClose = ws.data.isOwner && (room.roomMode !== ROOM_MODE.remote || member.role === MEMBER_ROLE.receiver);
+
+	if (!canClose) {
+		sendError(ws, 'not_owner', 'Only the room owner can close the room.');
+		return;
+	}
+
+	deleteRoom(room.roomId, 'owner_closed');
 }
 
 function removeMember(room: Room, member: Member, reason: string): void {

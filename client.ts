@@ -3,7 +3,7 @@
  * Generic room-based WebSocket relay server for Bun.
  *
  * @author Takuto Yanagida
- * @version 2026-07-08
+ * @version 2026-07-16
  */
 
 import {
@@ -129,6 +129,10 @@ export class RelayConnection<TPayload = unknown> {
 		ws?.close();
 	}
 
+	closeRoom(): void {
+		this.#send(makeCloseRoomMessage());
+	}
+
 	sendData(payload: TPayload): void {
 		this.#send(makeDataMessage(this.#runtime.clock.now(), payload));
 	}
@@ -178,6 +182,10 @@ export class RelayConnection<TPayload = unknown> {
 			this.resumeToken = msg.resumeToken as string;
 			this.displayName = msg.displayName as string;
 		}
+		if (msg.type === EVENT_TYPE.roomClosed) {
+			this.memberId    = null;
+			this.resumeToken = null;
+		}
 		if (msg.type === EVENT_TYPE.syncResponse) {
 			this.#send(makeSyncReportMessage(msg.clientSendTime, msg.serverRecvTime, msg.serverSendTime, this.#runtime.clock.now()));
 			return;
@@ -214,6 +222,10 @@ export function makeApproveMessage(requestId: string) {
 
 export function makeLeaveMessage() {
 	return { type: EVENT_TYPE.leave } satisfies RelayEvent;
+}
+
+export function makeCloseRoomMessage() {
+	return { type: EVENT_TYPE.closeRoom } satisfies RelayEvent;
 }
 
 export function makeSyncRequestMessage(clientSendTime: number) {

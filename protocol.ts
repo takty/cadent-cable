@@ -3,7 +3,7 @@
  * Generic room-based WebSocket relay server for Bun.
  *
  * @author Takuto Yanagida
- * @version 2026-07-08
+ * @version 2026-07-16
  */
 
 export const ROUTE = {
@@ -36,6 +36,7 @@ export const EVENT_TYPE = {
 	data        : 'data',
 	approve     : 'approve',
 	leave       : 'leave',
+	closeRoom   : 'closeRoom',
 
 	syncRequest : 'syncRequest',
 	syncResponse: 'syncResponse',
@@ -97,6 +98,7 @@ export type RelayEvent<TPayload = unknown> =
 	{ type: typeof EVENT_TYPE.data;    clientTime?: number; payload: TPayload; } |
 	{ type: typeof EVENT_TYPE.approve; requestId: string; } |
 	{ type: typeof EVENT_TYPE.leave; } |
+	{ type: typeof EVENT_TYPE.closeRoom; } |
 
 	{ type: typeof EVENT_TYPE.syncRequest; clientSendTime: number; } |
 	{ type: typeof EVENT_TYPE.syncReport;  clientSendTime: number; serverRecvTime: number; serverSendTime: number; clientRecvTime: number; } |

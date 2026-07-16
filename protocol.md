@@ -315,6 +315,27 @@ After receiving `leave`, the server removes the member from the room, invalidate
 
 A member that has sent `leave` cannot resume with the previous `memberId`.
 
+### `closeRoom`
+
+Explicitly closes the room.
+
+```json
+{
+  "type": "closeRoom"
+}
+```
+
+| Field  | Type          | Required | Meaning       |
+| ------ | ------------- | -------- | ------------- |
+| `type` | `"closeRoom"` | Yes      | Message type. |
+
+Only an active owner-side connection can send `closeRoom`.
+
+- In `broadcast` mode, the connection must be authenticated with the correct `ownerToken`.
+- In `remote` mode, the connection must be the receiver.
+
+After receiving a valid `closeRoom`, the server sends `roomClosed` with reason `owner_closed` to all connected members, closes their WebSocket connections, and deletes the room.
+
 ### `syncRequest`
 
 Starts a clock synchronization round trip.
@@ -617,7 +638,12 @@ Sent when a room is closed.
 }
 ```
 
-After this message, the server closes connected WebSocket connections in the room.
+| `reason` value  | Meaning                                    |
+| --------------- | ------------------------------------------ |
+| `empty_timeout` | The room was closed after remaining empty. |
+| `owner_closed`  | The owner explicitly closed the room.      |
+
+After this message, the server closes connected WebSocket connections in the room and deletes the room.
 
 ### `syncResponse`
 
@@ -673,6 +699,7 @@ Common error codes:
 | `invalid_data_message`      | A `data` message did not include `payload`.                                   |
 | `unknown_type`              | The message type is not supported.                                            |
 | `not_active`                | The connection is not active yet.                                             |
+| `not_owner`                 | The operation is allowed only for the room owner.                             |
 | `not_receiver`              | The operation is allowed only for the receiver.                               |
 | `join_request_not_found`    | The join request was not found.                                               |
 | `receiver_cannot_send_data` | A receiver attempted to send data in `remote` mode.                           |
