@@ -4,28 +4,33 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>Remote Controller Sample</title>
-	<link rel="stylesheet" href="style.css">
+	<link rel="stylesheet" href="style-controller.css">
 </head>
 <body class="controller-page">
-	<h1>Remote Controller</h1>
+	<h1 class="hidden">Remote Controller</h1>
 
 	<section class="panel">
-		<div>Room ID: <code id="room-id">-</code></div>
-		<div id="status" class="status"></div>
+		<span>Room ID:</span>
+		<input type="text" id="room-id">
+		<button type="button" id="connect">Connect</button>
 	</section>
 
 	<section class="controller">
 		<div class="dpad">
-			<button id="btn-up" class="control-button dpad-up" type="button" disabled>↑</button>
-			<button id="btn-left" class="control-button dpad-left" type="button" disabled>←</button>
-			<button id="btn-right" class="control-button dpad-right" type="button" disabled>→</button>
-			<button id="btn-down" class="control-button dpad-down" type="button" disabled>↓</button>
+			<button id="btn-u" class="dpad-u" type="button" disabled>↑</button>
+			<button id="btn-l" class="dpad-l" type="button" disabled>←</button>
+			<button id="btn-r" class="dpad-r" type="button" disabled>→</button>
+			<button id="btn-d" class="dpad-d" type="button" disabled>↓</button>
 		</div>
 
-		<div class="action-buttons">
-			<button id="btn-b" class="control-button action-button" type="button" disabled>B</button>
-			<button id="btn-a" class="control-button action-button" type="button" disabled>A</button>
+		<div class="face">
+			<button id="btn-b" type="button" disabled>B</button>
+			<button id="btn-a" type="button" disabled>A</button>
 		</div>
+	</section>
+
+	<section class="panel">
+		<div id="status" class="status"></div>
 	</section>
 
 	<script type="module" src="./controller.js"></script>

@@ -11,11 +11,13 @@ const SERVER_URL     = 'https://lab.takty.net/api/cc';
 const MOVE_SPEED     = 160; // px/sec
 const CHARACTER_SIZE = 28;
 
-type ButtonName = 'up' | 'down' | 'left' | 'right' | 'a' | 'b';
-
-type RemotePayload = {
-	kind  : 'buttonDown' | 'buttonUp';
-	button: ButtonName;
+type ControllerState = {
+	up   : boolean;
+	down : boolean;
+	left : boolean;
+	right: boolean;
+	a    : boolean;
+	b    : boolean;
 };
 
 type Character = {
@@ -24,7 +26,7 @@ type Character = {
 	x         : number;
 	y         : number;
 	colorIndex: number;
-	buttons   : Set<ButtonName>;
+	state     : ControllerState;
 	el        : HTMLDivElement;
 };
 
@@ -37,7 +39,7 @@ const COLORS = [
 	'#e67e22',
 ];
 
-let conn: RelayConnection<RemotePayload> | null = null;
+let conn: RelayConnection<ControllerState> | null = null;
 
 let roomId      = '';
 let ownerToken  = '';
@@ -93,14 +95,14 @@ async function startReceiver() {
 
 	setStatus('Connecting receiver...');
 
-	conn = new RelayConnection<RemotePayload>({
+	conn = new RelayConnection<ControllerState>({
 		serverUrl  : SERVER_URL,
 		roomId,
 		displayName: 'receiver',
 		ownerToken,
 		autoSync   : false,
 		onEvent    : handleRelayEvent,
-	} satisfies RelayConnectionOptions<RemotePayload>);
+	} satisfies RelayConnectionOptions<ControllerState>);
 
 	await conn.join();
 
@@ -138,7 +140,7 @@ function stopReceiver() {
 	lastFrameAt = 0;
 }
 
-function handleRelayEvent(ev: RelayEvent<RemotePayload>) {
+function handleRelayEvent(ev: RelayEvent<ControllerState>) {
 	switch (ev.type) {
 		case EVENT_TYPE.open:
 			setStatus('Connected. Waiting for join result...');
@@ -159,7 +161,7 @@ function handleRelayEvent(ev: RelayEvent<RemotePayload>) {
 			setCharactersFromMembers(ev.members as MemberInfo[]);
 			break;
 		case EVENT_TYPE.tick:
-			handleTick(ev.messages as QueuedMessage<RemotePayload>[]);
+			handleTick(ev.messages as QueuedMessage<ControllerState>[]);
 			break;
 		case EVENT_TYPE.roomClosed:
 			stopReceiver();
@@ -179,36 +181,31 @@ function handleRelayEvent(ev: RelayEvent<RemotePayload>) {
 	}
 }
 
-function handleTick(messages: QueuedMessage<RemotePayload>[]) {
+function handleTick(messages: QueuedMessage<ControllerState>[]) {
 	for (const msg of messages) {
-		const payload = msg?.payload;
-		if (!isRemotePayload(payload)) continue;
-
+		const state = msg?.payload;
+		if (!isControllerState(state)) continue;
 		const c = characters.get(msg.from) ?? createCharacter(msg.from);
 
-		if (payload.kind === 'buttonDown') {
-			if (payload.button === 'a') {
-				c.colorIndex = (c.colorIndex + 1) % COLORS.length;
-			}
-			c.buttons.add(payload.button);
-		} else {
-			c.buttons.delete(payload.button);
+		if (state.a && !c.state.a) {
+			c.colorIndex = (c.colorIndex + 1) % COLORS.length;
 		}
+		c.state = state;
 		renderCharacter(c);
 	}
 }
 
-function isRemotePayload(v: unknown): v is RemotePayload {
+function isControllerState(v: unknown): v is ControllerState {
 	if (!v || typeof v !== 'object') return false;
 
-	const p = v as Partial<RemotePayload>;
-	return (p.kind === 'buttonDown' || p.kind === 'buttonUp') &&
-		(p.button === 'up' ||
-		 p.button === 'down' ||
-		 p.button === 'left' ||
-		 p.button === 'right' ||
-		 p.button === 'a' ||
-		 p.button === 'b');
+	const state = v as Partial<ControllerState>;
+
+	return typeof state.up === 'boolean' &&
+		typeof state.down === 'boolean' &&
+		typeof state.left === 'boolean' &&
+		typeof state.right === 'boolean' &&
+		typeof state.a === 'boolean' &&
+		typeof state.b === 'boolean';
 }
 
 function setCharactersFromMembers(list: MemberInfo[]) {
@@ -219,7 +216,7 @@ function setCharactersFromMembers(list: MemberInfo[]) {
 		controllerIds.add(m.memberId);
 		const c = characters.get(m.memberId) ?? createCharacter(m.memberId);
 		if (m.state === MEMBER_STATE.disconnected) {
-			c.buttons.clear();
+			c.state = createInitialControllerState();
 			renderCharacter(c);
 		}
 	}
@@ -245,7 +242,7 @@ function createCharacter(memberId: string): Character {
 		x         : (no * 53) % w,
 		y         : (no * 97) % h,
 		colorIndex: (no - 1) % COLORS.length,
-		buttons   : new Set(),
+		state     : createInitialControllerState(),
 		el,
 	};
 	characters.set(memberId, c);
@@ -254,6 +251,17 @@ function createCharacter(memberId: string): Character {
 	updateControllerCount();
 
 	return c;
+}
+
+function createInitialControllerState(): ControllerState {
+	return {
+		up   : false,
+		down : false,
+		left : false,
+		right: false,
+		a    : false,
+		b    : false,
+	};
 }
 
 function deleteCharacter(memberId: string) {
@@ -283,10 +291,10 @@ function updateFrame(now: number) {
 		let dx = 0;
 		let dy = 0;
 
-		if (c.buttons.has('left'))  dx -= 1;
-		if (c.buttons.has('right')) dx += 1;
-		if (c.buttons.has('up'))    dy -= 1;
-		if (c.buttons.has('down'))  dy += 1;
+		if (c.state.left)  dx -= 1;
+		if (c.state.right) dx += 1;
+		if (c.state.up)    dy -= 1;
+		if (c.state.down)  dy += 1;
 
 		if (dx !== 0 || dy !== 0) {
 			const len = Math.hypot(dx, dy);
@@ -303,7 +311,7 @@ function updateFrame(now: number) {
 }
 
 function renderCharacter(c: Character) {
-	const scale = c.buttons.has('b') ? 1.45 : 1;
+	const scale = c.state.b ? 1.45 : 1;
 
 	c.el.style.left            = `${c.x - CHARACTER_SIZE / 2}px`;
 	c.el.style.top             = `${c.y - CHARACTER_SIZE / 2}px`;

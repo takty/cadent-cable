@@ -19,7 +19,8 @@ await Bun.build({
 
 await copyFile("receiver.html", join(OUT_DIR, "receiver.html"));
 await copyFile("controller.html", join(OUT_DIR, "controller.html"));
-await copyFile("style.css", join(OUT_DIR, "style.css"));
+await copyFile("style-receiver.css", join(OUT_DIR, "style-receiver.css"));
+await copyFile("style-controller.css", join(OUT_DIR, "style-controller.css"));
 await copyFile("qrcode.min.js", join(OUT_DIR, "qrcode.min.js"));
 
 console.log(`Built static files into ${OUT_DIR}/`);

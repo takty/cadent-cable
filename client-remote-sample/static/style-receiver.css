@@ -13,15 +13,6 @@ body {
 	max-width: 1080px;
 }
 
-.controller-page {
-	max-width: 720px;
-	min-height: 100svh;
-	touch-action: none;
-	user-select: none;
-	-webkit-user-select: none;
-	-webkit-touch-callout: none;
-}
-
 h1 {
 	margin: 0 0 16px;
 }
@@ -102,89 +93,8 @@ button {
 	will-change: left, top, transform;
 }
 
-.controller {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 36px;
-	align-items: center;
-	margin-top: 32px;
-}
-
-.dpad {
-	display: grid;
-	grid-template-columns: 88px 88px 88px;
-	grid-template-rows: 88px 88px 88px;
-	justify-content: center;
-}
-
-.dpad-up {
-	grid-column: 2;
-	grid-row: 1;
-}
-
-.dpad-left {
-	grid-column: 1;
-	grid-row: 2;
-}
-
-.dpad-right {
-	grid-column: 3;
-	grid-row: 2;
-}
-
-.dpad-down {
-	grid-column: 2;
-	grid-row: 3;
-}
-
-.action-buttons {
-	display: flex;
-	justify-content: center;
-	gap: 24px;
-}
-
-.control-button {
-	width: 84px;
-	height: 84px;
-	border: 2px solid #333;
-	border-radius: 14px;
-	background: #f8f8f8;
-	font-size: 30px;
-	font-weight: 700;
-	touch-action: none;
-}
-
-.action-button {
-	border-radius: 50%;
-}
-
-.control-button.pressed {
-	background: #333;
-	color: #fff;
-}
-
-.control-button:disabled {
-	opacity: 0.35;
-}
-
 @media (max-width: 760px) {
 	.receiver-layout {
 		grid-template-columns: 1fr;
-	}
-
-	.controller {
-		grid-template-columns: 1fr;
-		gap: 24px;
-	}
-
-	.dpad {
-		grid-template-columns: 76px 76px 76px;
-		grid-template-rows: 76px 76px 76px;
-	}
-
-	.control-button {
-		width: 72px;
-		height: 72px;
-		font-size: 26px;
 	}
 }

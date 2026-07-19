@@ -1,0 +1,147 @@
+* {
+	box-sizing: border-box;
+}
+
+body {
+	font-family: system-ui, sans-serif;
+	margin     : 24px auto;
+	padding    : 0 16px;
+	color      : #222;
+}
+
+.hidden {
+	display: none;
+}
+
+.controller-page {
+	max-width   : 720px;
+	min-height  : 100svh;
+	touch-action: none;
+	user-select : none;
+}
+
+h1 {
+	margin: 0 0 16px;
+}
+
+section {
+	margin: 16px 0;
+}
+
+button {
+	font: inherit;
+}
+
+/* --- */
+
+.panel {
+	display    : flex;
+	align-items: center;
+	gap        : 8px;
+}
+
+.panel > * {
+	height: 24px;
+}
+
+.panel :is(input, button) {
+	border       : 1px solid #333;
+	border-radius: 0;
+}
+
+.panel button {
+	background-color: #f8f8f8;
+}
+
+.status {
+	flex-basis: 100%;
+	min-height: 1.5em;
+	padding   : 8px;
+	text-align: end;
+}
+
+/* --- */
+
+.controller {
+	display              : grid;
+	grid-template-columns: 1fr 1fr;
+	gap                  : 2rem;
+	align-items          : center;
+	margin-block         : 2rem;
+}
+
+/* --- */
+
+.dpad {
+	display              : grid;
+	grid-template-columns: 88px 88px 88px;
+	grid-template-rows   : 88px 88px 88px;
+	justify-content      : center;
+}
+
+.dpad-u {
+	grid-column: 2;
+	grid-row   : 1;
+}
+
+.dpad-l {
+	grid-column: 1;
+	grid-row   : 2;
+}
+
+.dpad-r {
+	grid-column: 3;
+	grid-row   : 2;
+}
+
+.dpad-d {
+	grid-column: 2;
+	grid-row   : 3;
+}
+
+.face {
+	display        : flex;
+	justify-content: center;
+	gap            : 24px;
+
+	& button {
+		border-radius: 50%;
+	}
+}
+
+/* --- */
+
+.controller :where(button) {
+	width : 84px;
+	height: 84px;
+
+	border          : 2px solid #333;
+	border-radius   : 14px;
+	background-color: #f8f8f8;
+
+	font-size   : 30px;
+	font-weight : 700;
+	touch-action: none;
+
+	&.pressed {
+		background-color: #333;
+		color           : #fff;
+	}
+
+	&:disabled {
+		opacity: 0.35;
+	}
+}
+
+@media (max-width: 760px) {
+	.dpad {
+		grid-template-columns: 76px 76px 76px;
+		grid-template-rows   : 76px 76px 76px;
+	}
+
+	.controller button {
+		width    : 72px;
+		height   : 72px;
+		font-size: 26px;
+	}
+}
