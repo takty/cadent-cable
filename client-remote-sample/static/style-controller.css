@@ -134,14 +134,26 @@ button {
 }
 
 @media (max-width: 760px) {
+	:root {
+		--bs: 15vw;
+	}
+
+	.controller {
+		gap: 8vw;
+	}
+
+	.face {
+		gap: 8vw;
+	}
+
 	.dpad {
-		grid-template-columns: 76px 76px 76px;
-		grid-template-rows   : 76px 76px 76px;
+		grid-template-columns: var(--bs) var(--bs) var(--bs);
+		grid-template-rows   : var(--bs) var(--bs) var(--bs);
 	}
 
 	.controller button {
-		width    : 72px;
-		height   : 72px;
+		width    : calc(var(--bs) - 4px);
+		height   : calc(var(--bs) - 4px);
 		font-size: 26px;
 	}
 }
