@@ -5,7 +5,7 @@ import { EVENT_TYPE, type RelayEvent } from '../protocol';
 const SERVER_URL   = 'https://lab.takty.net/api/cc';
 const DISPLAY_NAME = 'controller';
 
-type ButtonName = 'up' | 'down' | 'left' | 'right' | 'a' | 'b';
+type ButtonName = 'up' | 'down' | 'left' | 'right' | 'a' | 'b' | 'x' | 'y';
 
 type ControllerState = {
 	up    : boolean;
@@ -14,6 +14,8 @@ type ControllerState = {
 	right : boolean;
 	a     : boolean;
 	b     : boolean;
+	x     : boolean;
+	y     : boolean;
 };
 
 let conn: RelayConnection<ControllerState> | null = null;
@@ -30,8 +32,25 @@ const $ = <T extends HTMLElement>(id: string): T => {
 };
 
 const roomIdEl  = $<HTMLInputElement>('room-id');
+const roomDlgEl = $<HTMLDialogElement>('room-id-dlg');
 const connectEl = $<HTMLInputElement>('connect');
 const statusEl  = $<HTMLDivElement>('status');
+const scanEl    = $<HTMLButtonElement>('btn-st');
+const scannerEl = $<HTMLDialogElement>('qr-scanner-dlg');
+const videoEl   = $<HTMLVideoElement>('qr-scanner-video');
+const canvasEl  = $<HTMLCanvasElement>('qr-scanner-canvas');
+const messageEl = $<HTMLParagraphElement>('qr-scanner-message');
+
+type QrCode = {
+	data: string;
+};
+
+type JsQr = (
+	data: Uint8ClampedArray,
+	width: number,
+	height: number,
+	options?: { inversionAttempts: 'dontInvert' },
+) => QrCode | null;
 
 const params = new URLSearchParams(location.search);
 const roomId = (params.get('roomId') ?? '').trim().toUpperCase();
@@ -44,16 +63,22 @@ setupButton('btn-l', 'left');
 setupButton('btn-r', 'right');
 setupButton('btn-a', 'a');
 setupButton('btn-b', 'b');
+setupButton('btn-x', 'x');
+setupButton('btn-y', 'y');
 
 window.addEventListener('blur', releaseAllButtons);
 window.addEventListener('pagehide', () => {
 	releaseAllButtons();
+	closeQrScanner();
 	conn?.leave();
 });
 
 connect();
 
 connectEl.addEventListener('click', connect);
+scanEl.addEventListener('click', openQrScanner);
+scannerEl.addEventListener('click', closeQrScanner);
+scannerEl.addEventListener('cancel', closeQrScanner);
 
 async function connect() {
 	if (isConnected) {
@@ -88,6 +113,9 @@ function handleRelayEvent(ev: RelayEvent<ControllerState>) {
 			setButtonsEnabled(true);
 			sendControllerState();
 			setStatus('Ready.');
+			if (roomDlgEl.matches(':popover-open')) {
+				roomDlgEl.hidePopover();
+			}
 			break;
 		case EVENT_TYPE.pending:
 			setStatus(`Waiting for approval... (${ev.requiredApprovals} OK required)`);
@@ -193,6 +221,8 @@ function createControllerState(): ControllerState {
 		right : isButtonPressed('right'),
 		a     : isButtonPressed('a'),
 		b     : isButtonPressed('b'),
+		x     : isButtonPressed('x'),
+		y     : isButtonPressed('y'),
 	};
 }
 
@@ -227,6 +257,99 @@ function setStatus(text: string) {
 
 function errorMessage(e: unknown): string {
 	return e instanceof Error ? e.message : String(e);
+}
+
+async function openQrScanner() {
+	const jsQR = (window as typeof window & { jsQR?: JsQr }).jsQR;
+	if (!jsQR) {
+		setStatus('QR scanner could not be loaded.');
+		return;
+	}
+	if (!navigator.mediaDevices?.getUserMedia) {
+		setStatus('Camera access is not supported by this browser.');
+		return;
+	}
+
+	if (scannerEl.open) return;
+	messageEl.textContent = 'Show the QR code to the camera.';
+	scannerEl.showModal();
+
+	try {
+		// The dialog remains viewport-sized when the Fullscreen API is unavailable.
+		await scannerEl.requestFullscreen?.().catch(() => undefined);
+		const stream = await navigator.mediaDevices.getUserMedia({
+			audio: false,
+			video: { facingMode: { ideal: 'environment' } },
+		});
+		if (!scannerEl.open) {
+			stream.getTracks().forEach((track) => track.stop());
+			return;
+		}
+
+		videoEl.srcObject = stream;
+		await videoEl.play();
+		const context = canvasEl.getContext('2d', { willReadFrequently: true });
+		if (!context) {
+			throw new Error('Canvas is not supported by this browser.');
+		}
+
+		const scan = () => {
+			if (!scannerEl.open) return;
+			try {
+				if (videoEl.readyState === HTMLMediaElement.HAVE_ENOUGH_DATA) {
+					canvasEl.width  = videoEl.videoWidth;
+					canvasEl.height = videoEl.videoHeight;
+					context.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
+
+					const image = context.getImageData(0, 0, canvasEl.width, canvasEl.height);
+					const result = jsQR(image.data, image.width, image.height, {
+						inversionAttempts: 'dontInvert',
+					});
+					const destination = result && toSafeWebUrl(result.data);
+					if (destination) {
+						closeQrScanner();
+						location.assign(destination);
+						return;
+					}
+					if (result) {
+						messageEl.textContent = 'This is not a QR code for a web URL.';
+					}
+				}
+			} catch (e) {
+				closeQrScanner();
+				setStatus(`QR scan failed: ${errorMessage(e)}`);
+				return;
+			}
+			requestAnimationFrame(scan);
+		};
+		requestAnimationFrame(scan);
+	} catch (e) {
+		closeQrScanner();
+		setStatus(`Could not open camera: ${errorMessage(e)}`);
+	}
+}
+
+function closeQrScanner() {
+	const stream = videoEl.srcObject;
+	if (stream instanceof MediaStream) {
+		stream.getTracks().forEach((track) => track.stop());
+	}
+	videoEl.srcObject = null;
+	if (document.fullscreenElement === scannerEl) {
+		void document.exitFullscreen().catch(() => undefined);
+	}
+	if (scannerEl.open) {
+		scannerEl.close();
+	}
+}
+
+function toSafeWebUrl(value: string): string | null {
+	try {
+		const url = new URL(value.trim());
+		return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : null;
+	} catch {
+		return null;
+	}
 }
 
 setButtonsEnabled(false);

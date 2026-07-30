@@ -22,5 +22,6 @@ await copyFile("controller.html", join(OUT_DIR, "controller.html"));
 await copyFile("style-receiver.css", join(OUT_DIR, "style-receiver.css"));
 await copyFile("style-controller.css", join(OUT_DIR, "style-controller.css"));
 await copyFile("qrcode.min.js", join(OUT_DIR, "qrcode.min.js"));
+await copyFile("jsQR.js", join(OUT_DIR, "jsQR.js"));
 
 console.log(`Built static files into ${OUT_DIR}/`);

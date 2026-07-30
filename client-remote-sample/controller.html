@@ -9,30 +9,43 @@
 <body class="controller-page">
 	<h1 class="hidden">Remote Controller</h1>
 
-	<section class="panel">
-		<span>Room ID:</span>
-		<input type="text" id="room-id">
-		<button type="button" id="connect">Connect</button>
-	</section>
-
 	<section class="controller">
+		<div id="base-dpad"></div>
+
 		<div class="dpad">
-			<button id="btn-u" class="dpad-u" type="button" disabled>↑</button>
-			<button id="btn-l" class="dpad-l" type="button" disabled>←</button>
-			<button id="btn-r" class="dpad-r" type="button" disabled>→</button>
-			<button id="btn-d" class="dpad-d" type="button" disabled>↓</button>
+			<button id="btn-u" type="button" disabled>↑</button>
+			<button id="btn-l" type="button" disabled>←</button>
+			<button id="btn-r" type="button" disabled>→</button>
+			<button id="btn-d" type="button" disabled>↓</button>
 		</div>
 
 		<div class="face">
-			<button id="btn-b" type="button" disabled>B</button>
 			<button id="btn-a" type="button" disabled>A</button>
+			<button id="btn-b" type="button" disabled>B</button>
+			<button id="btn-x" type="button" disabled>X</button>
+			<button id="btn-y" type="button" disabled>Y</button>
 		</div>
-	</section>
 
-	<section class="panel">
+		<div class="sys">
+			<button id="btn-sl" type="button" popovertarget="room-id-dlg"><span class="gg-shape-hexagon"></span></button>
+			<button id="btn-st" type="button"><span class="gg-qr"></span></button>
+		</div>
+
 		<div id="status" class="status"></div>
 	</section>
 
+	<dialog id="room-id-dlg" popover>
+		<input type="text" id="room-id" placeholder="Room ID">
+		<button type="button" id="connect">Connect</button>
+	</dialog>
+
+	<dialog id="qr-scanner-dlg" aria-label="QR scanner">
+		<video id="qr-scanner-video" autoplay muted playsinline></video>
+		<canvas id="qr-scanner-canvas" hidden></canvas>
+		<p id="qr-scanner-message">Show the QR code to the camera.</p>
+	</dialog>
+
+	<script src="./jsQR.js"></script>
 	<script type="module" src="./controller.js"></script>
 </body>
 </html>
