@@ -22,6 +22,7 @@ let conn: RelayConnection<ControllerState> | null = null;
 let isConnected = false;
 
 const buttonPointerMap = new Map<number, ButtonName>();
+const buttonKeyMap     = new Map<string, ButtonName>();
 const buttonCounts     = new Map<ButtonName, number>();
 const buttonEls        = new Map<ButtonName, HTMLButtonElement>();
 
@@ -162,7 +163,8 @@ function setupButton(id: string, button: ButtonName) {
 		buttonPointerMap.set(ev.pointerId, button);
 		el.setPointerCapture(ev.pointerId);
 
-		changeButtonCount(button, 1);
+		const changed = changeButtonCount(button, 1);
+		if (changed) sendControllerState();
 	});
 	const end = (ev: PointerEvent) => {
 		ev.preventDefault();
@@ -171,18 +173,54 @@ function setupButton(id: string, button: ButtonName) {
 		if (!button) return;
 
 		buttonPointerMap.delete(ev.pointerId);
-		changeButtonCount(button, -1);
+		const changed = changeButtonCount(button, -1);
+		if (changed) sendControllerState();
 	};
 	el.addEventListener('pointerup', end);
 	el.addEventListener('pointercancel', end);
 	el.addEventListener('lostpointercapture', end);
+
+	el.addEventListener('keydown', (ev) => {
+		if (ev.key !== 'Enter' && ev.key !== ' ') return;
+		ev.preventDefault();
+		if (!isConnected) return;
+
+		const keyId = `${ev.code}:${ev.location}`;
+		if (buttonKeyMap.has(keyId)) return;
+
+		buttonKeyMap.set(keyId, button);
+		const changed = changeButtonCount(button, 1);
+		if (changed) sendControllerState();
+	});
+	el.addEventListener('keyup', (ev) => {
+		if (ev.key !== 'Enter' && ev.key !== ' ') return;
+		ev.preventDefault();
+
+		const keyId = `${ev.code}:${ev.location}`;
+		const pressedButton = buttonKeyMap.get(keyId);
+		if (pressedButton !== button) return;
+
+		buttonKeyMap.delete(keyId);
+		const changed = changeButtonCount(button, -1);
+		if (changed) sendControllerState();
+	});
+	el.addEventListener('blur', () => {
+		let changed = false;
+		for (const [keyId, pressedButton] of buttonKeyMap) {
+			if (pressedButton !== button) continue;
+
+			buttonKeyMap.delete(keyId);
+			changed = changeButtonCount(button, -1) || changed;
+		}
+		if (changed) sendControllerState();
+	});
 }
 
-function changeButtonCount(button: ButtonName, delta: number) {
+function changeButtonCount(button: ButtonName, delta: number): boolean {
 	const oldCount = buttonCounts.get(button) ?? 0;
 	const newCount = Math.max(0, oldCount + delta);
 
-	if (oldCount === newCount) return;
+	if (oldCount === newCount) return false;
 
 	buttonCounts.set(button, newCount);
 	updateButtonView(button);
@@ -190,22 +228,19 @@ function changeButtonCount(button: ButtonName, delta: number) {
 	const oldPressed = oldCount > 0;
 	const newPressed = newCount > 0;
 
-	if (oldPressed !== newPressed) {
-		sendControllerState();
-	}
+	return oldPressed !== newPressed;
 }
 
 function releaseAllButtons() {
 	buttonPointerMap.clear();
+	buttonKeyMap.clear();
 	let changed = false;
 
 	for (const button of buttonCounts.keys()) {
 		const oldCount = buttonCounts.get(button) ?? 0;
 
 		if (oldCount > 0) {
-			buttonCounts.set(button, 0);
-			updateButtonView(button);
-			changed = true;
+			changed = changeButtonCount(button, -oldCount) || changed;
 		}
 	}
 	if (changed) {
