@@ -81,8 +81,14 @@ button {
 	background-image: radial-gradient(circle, #ddd 18%, #f8f8f8 20%, #f8f8f8 32.5%, #666 33.5%, #666 34%, #fff 34%);
 }
 
-.face {
-	display: contents;
+#face {
+	grid-column: 6/9;
+	grid-row   : 1/4;
+
+	display              : grid;
+	grid-template-rows   : subgrid;
+	grid-template-columns: subgrid;
+
 	& button { border-radius: 50%; }
 }
 
@@ -141,22 +147,22 @@ button {
 }
 
 #btn-a {
-	grid-column: 8;
+	grid-column: 3;
 	grid-row   : 2;
 }
 
 #btn-b {
-	grid-column: 7;
+	grid-column: 2;
 	grid-row   : 3;
 }
 
 #btn-x {
-	grid-column: 7;
+	grid-column: 2;
 	grid-row   : 1;
 }
 
 #btn-y {
-	grid-column: 6;
+	grid-column: 1;
 	grid-row   : 2;
 }
 

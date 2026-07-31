@@ -6,6 +6,7 @@ const SERVER_URL   = 'https://lab.takty.net/api/cc';
 const DISPLAY_NAME = 'controller';
 
 type ButtonName = 'up' | 'down' | 'left' | 'right' | 'a' | 'b' | 'x' | 'y';
+type FaceButtonName = 'a' | 'b' | 'x' | 'y';
 
 const DIRECTION_BITS = {
 	up   : 0b0001,
@@ -32,11 +33,11 @@ type ControllerState = {
 let conn: RelayConnection<ControllerState> | null = null;
 let isConnected = false;
 
-const buttonPointerMap = new Map<number, ButtonName>();
-const dpadPointerMap   = new Map<number, number>();
-const buttonKeyMap     = new Map<string, ButtonName>();
-const buttonCounts     = new Map<ButtonName, number>();
-const buttonEls        = new Map<ButtonName, HTMLButtonElement>();
+const dpadPointerMap = new Map<number, number>();
+const facePointerMap = new Map<number, FaceButtonName | null>();
+const buttonKeyMap   = new Map<string, ButtonName>();
+const buttonCounts   = new Map<ButtonName, number>();
+const buttonEls      = new Map<ButtonName, HTMLButtonElement>();
 
 const $ = <T extends HTMLElement>(id: string): T => {
 	const el = document.getElementById(id);
@@ -44,6 +45,8 @@ const $ = <T extends HTMLElement>(id: string): T => {
 	return el as T;
 };
 
+const dpadEl    = $<HTMLDivElement>('dpad');
+const faceEl    = $<HTMLDivElement>('face');
 const roomIdEl  = $<HTMLInputElement>('room-id');
 const roomDlgEl = $<HTMLDialogElement>('room-id-dlg');
 const connectEl = $<HTMLInputElement>('connect');
@@ -53,7 +56,6 @@ const scannerEl = $<HTMLDialogElement>('qr-scanner-dlg');
 const videoEl   = $<HTMLVideoElement>('qr-scanner-video');
 const canvasEl  = $<HTMLCanvasElement>('qr-scanner-canvas');
 const messageEl = $<HTMLParagraphElement>('qr-scanner-message');
-const dpadEl    = $<HTMLDivElement>('dpad');
 
 type QrCode = {
 	data: string;
@@ -71,15 +73,16 @@ const roomId = (params.get('roomId') ?? '').trim().toUpperCase();
 
 roomIdEl.value = roomId || '';
 
-setupButton('btn-u', 'up', false);
-setupButton('btn-d', 'down', false);
-setupButton('btn-l', 'left', false);
-setupButton('btn-r', 'right', false);
+setupButton('btn-u', 'up');
+setupButton('btn-d', 'down');
+setupButton('btn-l', 'left');
+setupButton('btn-r', 'right');
 setupButton('btn-a', 'a');
 setupButton('btn-b', 'b');
 setupButton('btn-x', 'x');
 setupButton('btn-y', 'y');
 setupDpad(dpadEl);
+setupFace(faceEl);
 
 window.addEventListener('blur', releaseAllButtons);
 window.addEventListener('pagehide', () => {
@@ -163,43 +166,11 @@ function handleRelayEvent(ev: RelayEvent<ControllerState>) {
 	}
 }
 
-function setupButton(id: string, button: ButtonName, usePointer = true) {
+function setupButton(id: string, button: ButtonName) {
 	const el = $<HTMLButtonElement>(id);
 
 	buttonEls.set(button, el);
 	buttonCounts.set(button, 0);
-
-	if (usePointer) {
-		el.addEventListener('pointerdown', (ev) => {
-			ev.preventDefault();
-			if (!isConnected) return;
-			if (buttonPointerMap.has(ev.pointerId)) return;
-
-			buttonPointerMap.set(ev.pointerId, button);
-			el.setPointerCapture(ev.pointerId);
-
-			if (changeButtonCount(button, 1)) {
-				sendControllerState();
-			}
-		});
-
-		const end = (ev: PointerEvent) => {
-			ev.preventDefault();
-
-			const pressedButton = buttonPointerMap.get(ev.pointerId);
-			if (!pressedButton) return;
-
-			buttonPointerMap.delete(ev.pointerId);
-
-			if (changeButtonCount(pressedButton, -1)) {
-				sendControllerState();
-			}
-		};
-
-		el.addEventListener('pointerup', end);
-		el.addEventListener('pointercancel', end);
-		el.addEventListener('lostpointercapture', end);
-	}
 	el.addEventListener('keydown', (ev) => {
 		if (ev.key !== 'Enter' && ev.key !== ' ') return;
 		ev.preventDefault();
@@ -281,24 +252,28 @@ function setupDpad(el: HTMLDivElement) {
 }
 
 function getDpadMask(el: HTMLElement, ev: PointerEvent): number {
-	const rect = el.getBoundingClientRect();
+	const r = el.getBoundingClientRect();
 
-	const x = (ev.clientX - rect.left) / rect.width;
-	const y = (ev.clientY - rect.top) / rect.height;
+	if (ev.clientX < r.left || ev.clientX > r.right ||
+		ev.clientY < r.top || ev.clientY > r.bottom
+	) {
+		return 0;
+	}
+	const x = (ev.clientX - r.left) / r.width;
+	const y = (ev.clientY - r.top) / r.height;
 
-	let mask = 0;
-
+	let m = 0;
 	if (x < 1 / 3) {
-		mask |= DIRECTION_BITS.left;
+		m |= DIRECTION_BITS.left;
 	} else if (x > 2 / 3) {
-		mask |= DIRECTION_BITS.right;
+		m |= DIRECTION_BITS.right;
 	}
 	if (y < 1 / 3) {
-		mask |= DIRECTION_BITS.up;
+		m |= DIRECTION_BITS.up;
 	} else if (y > 2 / 3) {
-		mask |= DIRECTION_BITS.down;
+		m |= DIRECTION_BITS.down;
 	}
-	return mask;
+	return m;
 }
 
 function changeButtonCount(button: ButtonName, delta: number): boolean {
@@ -313,9 +288,103 @@ function changeButtonCount(button: ButtonName, delta: number): boolean {
 	return (oldCount > 0) !== (newCount > 0);
 }
 
+function setupFace(el: HTMLDivElement) {
+	const update = (ev: PointerEvent) => {
+		if (!facePointerMap.has(ev.pointerId)) {
+			return;
+		}
+
+		ev.preventDefault();
+		if (setFacePointerButton(ev.pointerId, getFaceButton(el, ev))) {
+			sendControllerState();
+		}
+	};
+
+	el.addEventListener('pointerdown', (ev) => {
+		if (!isConnected || facePointerMap.has(ev.pointerId)) {
+			return;
+		}
+
+		facePointerMap.set(ev.pointerId, null);
+		el.setPointerCapture(ev.pointerId);
+		update(ev);
+	});
+
+	el.addEventListener('pointermove', update);
+
+	const end = (ev: PointerEvent) => {
+		if (!facePointerMap.has(ev.pointerId)) {
+			return;
+		}
+
+		ev.preventDefault();
+		const changed = setFacePointerButton(ev.pointerId, null);
+		facePointerMap.delete(ev.pointerId);
+
+		if (changed) {
+			sendControllerState();
+		}
+	};
+
+	el.addEventListener('pointerup', end);
+	el.addEventListener('pointercancel', end);
+	el.addEventListener('lostpointercapture', end);
+}
+
+function setFacePointerButton(pointerId: number, newButton: FaceButtonName | null): boolean {
+	const oldButton = facePointerMap.get(pointerId) ?? null;
+	if (oldButton === newButton) {
+		return false;
+	}
+
+	facePointerMap.set(pointerId, newButton);
+
+	let changed = false;
+	if (oldButton) {
+		changed = changeButtonCount(oldButton, -1) || changed;
+	}
+	if (newButton) {
+		changed = changeButtonCount(newButton, 1) || changed;
+	}
+
+	return changed;
+}
+
+function getFaceButton(el: HTMLElement, ev: PointerEvent): FaceButtonName | null {
+	const rect = el.getBoundingClientRect();
+	const x = (ev.clientX - rect.left) / rect.width;
+	const y = (ev.clientY - rect.top) / rect.height;
+
+	if (x < 0 || x > 1 || y < 0 || y > 1) {
+		return null;
+	}
+
+	if (x > 1 / 3 && x < 2 / 3) {
+		if (y < 1 / 3) {
+			return 'x';
+		}
+		if (y > 2 / 3) {
+			return 'b';
+		}
+	}
+
+	if (y > 1 / 3 && y < 2 / 3) {
+		if (x < 1 / 3) {
+			return 'y';
+		}
+		if (x > 2 / 3) {
+			return 'a';
+		}
+	}
+
+	return null;
+}
+
+
+
 function releaseAllButtons() {
-	buttonPointerMap.clear();
 	dpadPointerMap.clear();
+	facePointerMap.clear();
 	buttonKeyMap.clear();
 	let changed = false;
 
