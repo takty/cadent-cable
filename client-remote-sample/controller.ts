@@ -7,6 +7,22 @@ const DISPLAY_NAME = 'controller';
 
 type ButtonName = 'up' | 'down' | 'left' | 'right' | 'a' | 'b' | 'x' | 'y';
 
+type DirectionButtonName = 'up' | 'down' | 'left' | 'right';
+
+const DIRECTION_BITS: Record<DirectionButtonName, number> = {
+	up   : 0b0001,
+	down : 0b0010,
+	left : 0b0100,
+	right: 0b1000,
+};
+
+const DIRECTIONS: readonly DirectionButtonName[] = [
+	'up',
+	'down',
+	'left',
+	'right',
+];
+
 type ControllerState = {
 	up    : boolean;
 	down  : boolean;
@@ -20,8 +36,10 @@ type ControllerState = {
 
 let conn: RelayConnection<ControllerState> | null = null;
 let isConnected = false;
+let lastSentControllerState: ControllerState | null = null;
 
 const buttonPointerMap = new Map<number, ButtonName>();
+const dpadPointerMap   = new Map<number, number>();
 const buttonKeyMap     = new Map<string, ButtonName>();
 const buttonCounts     = new Map<ButtonName, number>();
 const buttonEls        = new Map<ButtonName, HTMLButtonElement>();
@@ -41,6 +59,7 @@ const scannerEl = $<HTMLDialogElement>('qr-scanner-dlg');
 const videoEl   = $<HTMLVideoElement>('qr-scanner-video');
 const canvasEl  = $<HTMLCanvasElement>('qr-scanner-canvas');
 const messageEl = $<HTMLParagraphElement>('qr-scanner-message');
+const dpadEl    = $<HTMLDivElement>('dpad');
 
 type QrCode = {
 	data: string;
@@ -66,6 +85,7 @@ setupButton('btn-a', 'a');
 setupButton('btn-b', 'b');
 setupButton('btn-x', 'x');
 setupButton('btn-y', 'y');
+setupDpad(dpadEl);
 
 window.addEventListener('blur', releaseAllButtons);
 window.addEventListener('pagehide', () => {
@@ -158,6 +178,18 @@ function setupButton(id: string, button: ButtonName) {
 	el.addEventListener('pointerdown', (ev) => {
 		ev.preventDefault();
 		if (!isConnected) return;
+
+		if (isDirectionButton(button)) {
+			if (dpadPointerMap.has(ev.pointerId)) return;
+
+			el.setPointerCapture(ev.pointerId);
+			setDpadPointerMask(
+				ev.pointerId,
+				DIRECTION_BITS[button],
+			);
+			return;
+		}
+
 		if (buttonPointerMap.has(ev.pointerId)) return;
 
 		buttonPointerMap.set(ev.pointerId, button);
@@ -166,16 +198,27 @@ function setupButton(id: string, button: ButtonName) {
 		const changed = changeButtonCount(button, 1);
 		if (changed) sendControllerState();
 	});
+
 	const end = (ev: PointerEvent) => {
 		ev.preventDefault();
 
-		const button = buttonPointerMap.get(ev.pointerId);
-		if (!button) return;
+		if (isDirectionButton(button)) {
+			if (!dpadPointerMap.has(ev.pointerId)) return;
+
+			setDpadPointerMask(ev.pointerId, 0);
+			dpadPointerMap.delete(ev.pointerId);
+			return;
+		}
+
+		const pressedButton = buttonPointerMap.get(ev.pointerId);
+		if (!pressedButton) return;
 
 		buttonPointerMap.delete(ev.pointerId);
-		const changed = changeButtonCount(button, -1);
+
+		const changed = changeButtonCount(pressedButton, -1);
 		if (changed) sendControllerState();
 	};
+
 	el.addEventListener('pointerup', end);
 	el.addEventListener('pointercancel', end);
 	el.addEventListener('lostpointercapture', end);
@@ -216,6 +259,101 @@ function setupButton(id: string, button: ButtonName) {
 	});
 }
 
+function isDirectionButton(button: ButtonName): button is DirectionButtonName {
+	return (
+		button === 'up' ||
+		button === 'down' ||
+		button === 'left' ||
+		button === 'right'
+	);
+}
+
+function setDpadPointerMask(pointerId: number, newMask: number) {
+	const oldMask = dpadPointerMap.get(pointerId) ?? 0;
+
+	if (oldMask === newMask) return;
+
+	for (const direction of DIRECTIONS) {
+		const bit = DIRECTION_BITS[direction];
+
+		const oldPressed = (oldMask & bit) !== 0;
+		const newPressed = (newMask & bit) !== 0;
+
+		if (oldPressed === newPressed) continue;
+
+		changeButtonCount(direction, newPressed ? 1 : -1);
+	}
+	dpadPointerMap.set(pointerId, newMask);
+}
+
+function setupDpad(el: HTMLDivElement) {
+	el.addEventListener('pointerdown', (ev) => {
+		ev.preventDefault();
+		if (!isConnected) return;
+
+		if (!dpadPointerMap.has(ev.pointerId)) {
+			el.setPointerCapture(ev.pointerId);
+		}
+		setDpadPointerMask(ev.pointerId, getDpadMask(el, ev));
+		sendControllerStateIfChanged();
+	});
+	el.addEventListener('pointermove', (ev) => {
+		if (!dpadPointerMap.has(ev.pointerId)) return;
+
+		ev.preventDefault();
+
+		setDpadPointerMask(ev.pointerId, getDpadMask(el, ev));
+		sendControllerStateIfChanged();
+	});
+	const end = (ev: PointerEvent) => {
+		ev.preventDefault();
+
+		if (dpadPointerMap.has(ev.pointerId)) {
+			setDpadPointerMask(ev.pointerId, 0);
+			dpadPointerMap.delete(ev.pointerId);
+		}
+		sendControllerStateIfChanged();
+	};
+
+	el.addEventListener('pointerup', end);
+	el.addEventListener('pointercancel', end);
+	el.addEventListener('lostpointercapture', end);
+}
+
+function getDpadMask(el: HTMLElement, ev: PointerEvent): number {
+	const rect = el.getBoundingClientRect();
+
+	const x = (ev.clientX - rect.left) / rect.width;
+	const y = (ev.clientY - rect.top) / rect.height;
+
+	let mask = 0;
+
+	if (x < 1 / 3) {
+		mask |= DIRECTION_BITS.left;
+	} else if (x > 2 / 3) {
+		mask |= DIRECTION_BITS.right;
+	}
+	if (y < 1 / 3) {
+		mask |= DIRECTION_BITS.up;
+	} else if (y > 2 / 3) {
+		mask |= DIRECTION_BITS.down;
+	}
+	return mask;
+}
+
+function controllerStatesEqual(a: ControllerState, b: ControllerState): boolean {
+	return (
+		a.up === b.up &&
+		a.down === b.down &&
+		a.left === b.left &&
+		a.right === b.right &&
+		a.a === b.a &&
+		a.b === b.b &&
+		a.x === b.x &&
+		a.y === b.y
+	);
+}
+
 function changeButtonCount(button: ButtonName, delta: number): boolean {
 	const oldCount = buttonCounts.get(button) ?? 0;
 	const newCount = Math.max(0, oldCount + delta);
@@ -233,6 +371,7 @@ function changeButtonCount(button: ButtonName, delta: number): boolean {
 
 function releaseAllButtons() {
 	buttonPointerMap.clear();
+	dpadPointerMap.clear();
 	buttonKeyMap.clear();
 	let changed = false;
 
@@ -265,13 +404,30 @@ function isButtonPressed(button: ButtonName): boolean {
 	return (buttonCounts.get(button) ?? 0) > 0;
 }
 
-function sendControllerState() {
+function sendControllerState(
+	state: ControllerState = createControllerState(),
+) {
 	if (!isConnected) return;
+
 	try {
-		conn?.sendData(createControllerState());
+		conn?.sendData(state);
+		lastSentControllerState = state;
 	} catch (e) {
 		setStatus(errorMessage(e));
 	}
+}
+
+function sendControllerStateIfChanged() {
+	const state = createControllerState();
+
+	if (
+		lastSentControllerState &&
+		controllerStatesEqual(lastSentControllerState, state)
+	) {
+		return;
+	}
+
+	sendControllerState(state);
 }
 
 function updateButtonView(button: ButtonName) {
