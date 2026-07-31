@@ -7,21 +7,16 @@ const DISPLAY_NAME = 'controller';
 
 type ButtonName = 'up' | 'down' | 'left' | 'right' | 'a' | 'b' | 'x' | 'y';
 
-type DirectionButtonName = 'up' | 'down' | 'left' | 'right';
-
-const DIRECTION_BITS: Record<DirectionButtonName, number> = {
+const DIRECTION_BITS = {
 	up   : 0b0001,
 	down : 0b0010,
 	left : 0b0100,
 	right: 0b1000,
-};
+} as const;
 
-const DIRECTIONS: readonly DirectionButtonName[] = [
-	'up',
-	'down',
-	'left',
-	'right',
-];
+type DirectionButtonName = keyof typeof DIRECTION_BITS;
+
+const DIRECTIONS = Object.keys(DIRECTION_BITS) as DirectionButtonName[];
 
 type ControllerState = {
 	up    : boolean;
@@ -36,7 +31,6 @@ type ControllerState = {
 
 let conn: RelayConnection<ControllerState> | null = null;
 let isConnected = false;
-let lastSentControllerState: ControllerState | null = null;
 
 const buttonPointerMap = new Map<number, ButtonName>();
 const dpadPointerMap   = new Map<number, number>();
@@ -77,10 +71,10 @@ const roomId = (params.get('roomId') ?? '').trim().toUpperCase();
 
 roomIdEl.value = roomId || '';
 
-setupButton('btn-u', 'up');
-setupButton('btn-d', 'down');
-setupButton('btn-l', 'left');
-setupButton('btn-r', 'right');
+setupButton('btn-u', 'up', false);
+setupButton('btn-d', 'down', false);
+setupButton('btn-l', 'left', false);
+setupButton('btn-r', 'right', false);
 setupButton('btn-a', 'a');
 setupButton('btn-b', 'b');
 setupButton('btn-x', 'x');
@@ -169,59 +163,43 @@ function handleRelayEvent(ev: RelayEvent<ControllerState>) {
 	}
 }
 
-function setupButton(id: string, button: ButtonName) {
+function setupButton(id: string, button: ButtonName, usePointer = true) {
 	const el = $<HTMLButtonElement>(id);
 
 	buttonEls.set(button, el);
 	buttonCounts.set(button, 0);
 
-	el.addEventListener('pointerdown', (ev) => {
-		ev.preventDefault();
-		if (!isConnected) return;
+	if (usePointer) {
+		el.addEventListener('pointerdown', (ev) => {
+			ev.preventDefault();
+			if (!isConnected) return;
+			if (buttonPointerMap.has(ev.pointerId)) return;
 
-		if (isDirectionButton(button)) {
-			if (dpadPointerMap.has(ev.pointerId)) return;
-
+			buttonPointerMap.set(ev.pointerId, button);
 			el.setPointerCapture(ev.pointerId);
-			setDpadPointerMask(
-				ev.pointerId,
-				DIRECTION_BITS[button],
-			);
-			return;
-		}
 
-		if (buttonPointerMap.has(ev.pointerId)) return;
+			if (changeButtonCount(button, 1)) {
+				sendControllerState();
+			}
+		});
 
-		buttonPointerMap.set(ev.pointerId, button);
-		el.setPointerCapture(ev.pointerId);
+		const end = (ev: PointerEvent) => {
+			ev.preventDefault();
 
-		const changed = changeButtonCount(button, 1);
-		if (changed) sendControllerState();
-	});
+			const pressedButton = buttonPointerMap.get(ev.pointerId);
+			if (!pressedButton) return;
 
-	const end = (ev: PointerEvent) => {
-		ev.preventDefault();
+			buttonPointerMap.delete(ev.pointerId);
 
-		if (isDirectionButton(button)) {
-			if (!dpadPointerMap.has(ev.pointerId)) return;
+			if (changeButtonCount(pressedButton, -1)) {
+				sendControllerState();
+			}
+		};
 
-			setDpadPointerMask(ev.pointerId, 0);
-			dpadPointerMap.delete(ev.pointerId);
-			return;
-		}
-
-		const pressedButton = buttonPointerMap.get(ev.pointerId);
-		if (!pressedButton) return;
-
-		buttonPointerMap.delete(ev.pointerId);
-
-		const changed = changeButtonCount(pressedButton, -1);
-		if (changed) sendControllerState();
-	};
-
-	el.addEventListener('pointerup', end);
-	el.addEventListener('pointercancel', end);
-	el.addEventListener('lostpointercapture', end);
+		el.addEventListener('pointerup', end);
+		el.addEventListener('pointercancel', end);
+		el.addEventListener('lostpointercapture', end);
+	}
 
 	el.addEventListener('keydown', (ev) => {
 		if (ev.key !== 'Enter' && ev.key !== ' ') return;
@@ -259,60 +237,47 @@ function setupButton(id: string, button: ButtonName) {
 	});
 }
 
-function isDirectionButton(button: ButtonName): button is DirectionButtonName {
-	return (
-		button === 'up' ||
-		button === 'down' ||
-		button === 'left' ||
-		button === 'right'
-	);
-}
-
 function setDpadPointerMask(pointerId: number, newMask: number) {
 	const oldMask = dpadPointerMap.get(pointerId) ?? 0;
+	if (oldMask === newMask) return false;
 
-	if (oldMask === newMask) return;
+	dpadPointerMap.set(pointerId, newMask);
 
+	let changed = false;
 	for (const direction of DIRECTIONS) {
 		const bit = DIRECTION_BITS[direction];
-
-		const oldPressed = (oldMask & bit) !== 0;
-		const newPressed = (newMask & bit) !== 0;
-
-		if (oldPressed === newPressed) continue;
-
-		changeButtonCount(direction, newPressed ? 1 : -1);
+		if ((oldMask & bit) === (newMask & bit)) continue;
+		changed = changeButtonCount(direction, (newMask & bit) ? 1 : -1) || changed;
 	}
-	dpadPointerMap.set(pointerId, newMask);
+	return changed;
 }
 
 function setupDpad(el: HTMLDivElement) {
-	el.addEventListener('pointerdown', (ev) => {
-		ev.preventDefault();
-		if (!isConnected) return;
-
-		if (!dpadPointerMap.has(ev.pointerId)) {
-			el.setPointerCapture(ev.pointerId);
-		}
-		setDpadPointerMask(ev.pointerId, getDpadMask(el, ev));
-		sendControllerStateIfChanged();
-	});
-	el.addEventListener('pointermove', (ev) => {
+	const update = (ev: PointerEvent) => {
 		if (!dpadPointerMap.has(ev.pointerId)) return;
 
 		ev.preventDefault();
+		if (setDpadPointerMask(ev.pointerId, getDpadMask(el, ev))) sendControllerState();
+	};
 
-		setDpadPointerMask(ev.pointerId, getDpadMask(el, ev));
-		sendControllerStateIfChanged();
+	el.addEventListener('pointerdown', (ev) => {
+		if (!isConnected || dpadPointerMap.has(ev.pointerId)) return;
+
+		dpadPointerMap.set(ev.pointerId, 0);
+		el.setPointerCapture(ev.pointerId);
+		update(ev);
 	});
-	const end = (ev: PointerEvent) => {
-		ev.preventDefault();
 
-		if (dpadPointerMap.has(ev.pointerId)) {
-			setDpadPointerMask(ev.pointerId, 0);
-			dpadPointerMap.delete(ev.pointerId);
-		}
-		sendControllerStateIfChanged();
+	el.addEventListener('pointermove', update);
+
+	const end = (ev: PointerEvent) => {
+		if (!dpadPointerMap.has(ev.pointerId)) return;
+
+		ev.preventDefault();
+		const changed = setDpadPointerMask(ev.pointerId, 0);
+		dpadPointerMap.delete(ev.pointerId);
+
+		if (changed) sendControllerState();
 	};
 
 	el.addEventListener('pointerup', end);
@@ -341,19 +306,6 @@ function getDpadMask(el: HTMLElement, ev: PointerEvent): number {
 	return mask;
 }
 
-function controllerStatesEqual(a: ControllerState, b: ControllerState): boolean {
-	return (
-		a.up === b.up &&
-		a.down === b.down &&
-		a.left === b.left &&
-		a.right === b.right &&
-		a.a === b.a &&
-		a.b === b.b &&
-		a.x === b.x &&
-		a.y === b.y
-	);
-}
-
 function changeButtonCount(button: ButtonName, delta: number): boolean {
 	const oldCount = buttonCounts.get(button) ?? 0;
 	const newCount = Math.max(0, oldCount + delta);
@@ -362,11 +314,6 @@ function changeButtonCount(button: ButtonName, delta: number): boolean {
 
 	buttonCounts.set(button, newCount);
 	updateButtonView(button);
-
-	const oldPressed = oldCount > 0;
-	const newPressed = newCount > 0;
-
-	return oldPressed !== newPressed;
 }
 
 function releaseAllButtons() {
@@ -404,30 +351,14 @@ function isButtonPressed(button: ButtonName): boolean {
 	return (buttonCounts.get(button) ?? 0) > 0;
 }
 
-function sendControllerState(
-	state: ControllerState = createControllerState(),
-) {
+function sendControllerState() {
 	if (!isConnected) return;
 
 	try {
-		conn?.sendData(state);
-		lastSentControllerState = state;
+		conn?.sendData(createControllerState());
 	} catch (e) {
 		setStatus(errorMessage(e));
 	}
-}
-
-function sendControllerStateIfChanged() {
-	const state = createControllerState();
-
-	if (
-		lastSentControllerState &&
-		controllerStatesEqual(lastSentControllerState, state)
-	) {
-		return;
-	}
-
-	sendControllerState(state);
 }
 
 function updateButtonView(button: ButtonName) {
