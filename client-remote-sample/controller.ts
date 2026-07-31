@@ -7,7 +7,7 @@ const DISPLAY_NAME = 'controller';
 
 type ButtonName = 'up' | 'down' | 'left' | 'right' | 'a' | 'b' | 'x' | 'y';
 type FaceButtonName = 'a' | 'b' | 'x' | 'y';
-
+const FACE_BUTTONS = ['a', 'b', 'x', 'y'] as const;
 const DIRECTION_BITS = {
 	up   : 0b0001,
 	down : 0b0010,
@@ -293,9 +293,8 @@ function setupFace(el: HTMLDivElement) {
 		if (!facePointerMap.has(ev.pointerId)) {
 			return;
 		}
-
 		ev.preventDefault();
-		if (setFacePointerButton(ev.pointerId, getFaceButton(el, ev))) {
+		if (setFacePointerButton(ev.pointerId, getFaceButton(ev))) {
 			sendControllerState();
 		}
 	};
@@ -350,30 +349,20 @@ function setFacePointerButton(pointerId: number, newButton: FaceButtonName | nul
 	return changed;
 }
 
-function getFaceButton(el: HTMLElement, ev: PointerEvent): FaceButtonName | null {
-	const rect = el.getBoundingClientRect();
-	const x = (ev.clientX - rect.left) / rect.width;
-	const y = (ev.clientY - rect.top) / rect.height;
-
-	if (x < 0 || x > 1 || y < 0 || y > 1) {
-		return null;
-	}
-
-	if (x > 1 / 3 && x < 2 / 3) {
-		if (y < 1 / 3) {
-			return 'x';
+function getFaceButton(ev: PointerEvent): FaceButtonName | null {
+	for (const button of FACE_BUTTONS) {
+		const rect = buttonEls.get(button)?.getBoundingClientRect();
+		if (!rect) {
+			continue;
 		}
-		if (y > 2 / 3) {
-			return 'b';
-		}
-	}
 
-	if (y > 1 / 3 && y < 2 / 3) {
-		if (x < 1 / 3) {
-			return 'y';
-		}
-		if (x > 2 / 3) {
-			return 'a';
+		if (
+			ev.clientX >= rect.left &&
+			ev.clientX <= rect.right &&
+			ev.clientY >= rect.top &&
+			ev.clientY <= rect.bottom
+		) {
+			return button;
 		}
 	}
 
