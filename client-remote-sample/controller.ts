@@ -200,7 +200,6 @@ function setupButton(id: string, button: ButtonName, usePointer = true) {
 		el.addEventListener('pointercancel', end);
 		el.addEventListener('lostpointercapture', end);
 	}
-
 	el.addEventListener('keydown', (ev) => {
 		if (ev.key !== 'Enter' && ev.key !== ' ') return;
 		ev.preventDefault();
@@ -259,7 +258,6 @@ function setupDpad(el: HTMLDivElement) {
 		ev.preventDefault();
 		if (setDpadPointerMask(ev.pointerId, getDpadMask(el, ev))) sendControllerState();
 	};
-
 	el.addEventListener('pointerdown', (ev) => {
 		if (!isConnected || dpadPointerMap.has(ev.pointerId)) return;
 
@@ -267,9 +265,7 @@ function setupDpad(el: HTMLDivElement) {
 		el.setPointerCapture(ev.pointerId);
 		update(ev);
 	});
-
 	el.addEventListener('pointermove', update);
-
 	const end = (ev: PointerEvent) => {
 		if (!dpadPointerMap.has(ev.pointerId)) return;
 
@@ -279,7 +275,6 @@ function setupDpad(el: HTMLDivElement) {
 
 		if (changed) sendControllerState();
 	};
-
 	el.addEventListener('pointerup', end);
 	el.addEventListener('pointercancel', end);
 	el.addEventListener('lostpointercapture', end);
@@ -314,6 +309,8 @@ function changeButtonCount(button: ButtonName, delta: number): boolean {
 
 	buttonCounts.set(button, newCount);
 	updateButtonView(button);
+
+	return (oldCount > 0) !== (newCount > 0);
 }
 
 function releaseAllButtons() {
@@ -329,21 +326,19 @@ function releaseAllButtons() {
 			changed = changeButtonCount(button, -oldCount) || changed;
 		}
 	}
-	if (changed) {
-		sendControllerState();
-	}
+	if (changed) sendControllerState();
 }
 
 function createControllerState(): ControllerState {
 	return {
-		up    : isButtonPressed('up'),
-		down  : isButtonPressed('down'),
-		left  : isButtonPressed('left'),
-		right : isButtonPressed('right'),
-		a     : isButtonPressed('a'),
-		b     : isButtonPressed('b'),
-		x     : isButtonPressed('x'),
-		y     : isButtonPressed('y'),
+		up   : isButtonPressed('up'),
+		down : isButtonPressed('down'),
+		left : isButtonPressed('left'),
+		right: isButtonPressed('right'),
+		a    : isButtonPressed('a'),
+		b    : isButtonPressed('b'),
+		x    : isButtonPressed('x'),
+		y    : isButtonPressed('y'),
 	};
 }
 
@@ -353,7 +348,6 @@ function isButtonPressed(button: ButtonName): boolean {
 
 function sendControllerState() {
 	if (!isConnected) return;
-
 	try {
 		conn?.sendData(createControllerState());
 	} catch (e) {
@@ -391,7 +385,6 @@ async function openQrScanner() {
 		setStatus('Camera access is not supported by this browser.');
 		return;
 	}
-
 	if (scannerEl.open) return;
 	messageEl.textContent = 'Show the QR code to the camera.';
 	scannerEl.showModal();
@@ -407,14 +400,12 @@ async function openQrScanner() {
 			stream.getTracks().forEach((track) => track.stop());
 			return;
 		}
-
 		videoEl.srcObject = stream;
 		await videoEl.play();
 		const context = canvasEl.getContext('2d', { willReadFrequently: true });
 		if (!context) {
 			throw new Error('Canvas is not supported by this browser.');
 		}
-
 		const scan = () => {
 			if (!scannerEl.open) return;
 			try {
