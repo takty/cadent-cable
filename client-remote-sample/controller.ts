@@ -5,39 +5,29 @@ import { EVENT_TYPE, type RelayEvent } from '../protocol';
 const SERVER_URL   = 'https://lab.takty.net/api/cc';
 const DISPLAY_NAME = 'controller';
 
-type ButtonName = 'up' | 'down' | 'left' | 'right' | 'a' | 'b' | 'x' | 'y';
-type FaceButtonName = 'a' | 'b' | 'x' | 'y';
-const FACE_BUTTONS = ['a', 'b', 'x', 'y'] as const;
-const DIRECTION_BITS = {
+const FACE_BTNS = ['a', 'b', 'x', 'y'] as const;
+const DIR_BITS  = {
 	up   : 0b0001,
 	down : 0b0010,
 	left : 0b0100,
 	right: 0b1000,
 } as const;
 
-type DirectionButtonName = keyof typeof DIRECTION_BITS;
+type FaceBtnName = typeof FACE_BTNS[number];
+type DirBtnName  = keyof typeof DIR_BITS;
+type BtnName     = DirBtnName | FaceBtnName;
+type ContState   = Record<BtnName, boolean>;
 
-const DIRECTIONS = Object.keys(DIRECTION_BITS) as DirectionButtonName[];
+const DIRS = Object.keys(DIR_BITS) as DirBtnName[];
 
-type ControllerState = {
-	up    : boolean;
-	down  : boolean;
-	left  : boolean;
-	right : boolean;
-	a     : boolean;
-	b     : boolean;
-	x     : boolean;
-	y     : boolean;
-};
-
-let conn: RelayConnection<ControllerState> | null = null;
+let conn: RelayConnection<ContState> | null = null;
 let isConnected = false;
 
-const dpadPointerMap = new Map<number, number>();
-const facePointerMap = new Map<number, FaceButtonName | null>();
-const buttonKeyMap   = new Map<string, ButtonName>();
-const buttonCounts   = new Map<ButtonName, number>();
-const buttonEls      = new Map<ButtonName, HTMLButtonElement>();
+const dpadPtrMap = new Map<number, number>();
+const facePtrMap = new Map<number, FaceBtnName | null>();
+const btnKeyMap  = new Map<string, BtnName>();
+const btnCounts  = new Map<BtnName, number>();
+const btnEls     = new Map<BtnName, HTMLButtonElement>();
 
 const $ = <T extends HTMLElement>(id: string): T => {
 	const el = document.getElementById(id);
@@ -45,12 +35,14 @@ const $ = <T extends HTMLElement>(id: string): T => {
 	return el as T;
 };
 
-const dpadEl    = $<HTMLDivElement>('dpad');
-const faceEl    = $<HTMLDivElement>('face');
-const roomIdEl  = $<HTMLInputElement>('room-id');
+const dpadEl   = $<HTMLDivElement>('dpad');
+const faceEl   = $<HTMLDivElement>('face');
+const statusEl = $<HTMLDivElement>('status');
+
 const roomDlgEl = $<HTMLDialogElement>('room-id-dlg');
+const roomIdEl  = $<HTMLInputElement>('room-id');
 const connectEl = $<HTMLInputElement>('connect');
-const statusEl  = $<HTMLDivElement>('status');
+
 const scanEl    = $<HTMLButtonElement>('btn-st');
 const scannerEl = $<HTMLDialogElement>('qr-scanner-dlg');
 const videoEl   = $<HTMLVideoElement>('qr-scanner-video');
@@ -60,11 +52,10 @@ const messageEl = $<HTMLParagraphElement>('qr-scanner-message');
 type QrCode = {
 	data: string;
 };
-
 type JsQr = (
-	data: Uint8ClampedArray,
-	width: number,
-	height: number,
+	data    : Uint8ClampedArray,
+	width   : number,
+	height  : number,
 	options?: { inversionAttempts: 'dontInvert' },
 ) => QrCode | null;
 
@@ -73,20 +64,20 @@ const roomId = (params.get('roomId') ?? '').trim().toUpperCase();
 
 roomIdEl.value = roomId || '';
 
-setupButton('btn-u', 'up');
-setupButton('btn-d', 'down');
-setupButton('btn-l', 'left');
-setupButton('btn-r', 'right');
-setupButton('btn-a', 'a');
-setupButton('btn-b', 'b');
-setupButton('btn-x', 'x');
-setupButton('btn-y', 'y');
-setupDpad(dpadEl);
-setupFace(faceEl);
+setupBtn('btn-u', 'up');
+setupBtn('btn-d', 'down');
+setupBtn('btn-l', 'left');
+setupBtn('btn-r', 'right');
+setupBtn('btn-a', 'a');
+setupBtn('btn-b', 'b');
+setupBtn('btn-x', 'x');
+setupBtn('btn-y', 'y');
+setupPtrCont(dpadEl, dpadPtrMap, 0, (ev) => getDpadMask(dpadEl, ev), setDpadPtrMask);
+setupPtrCont(faceEl, facePtrMap, null, getFaceBtn, setFacePtrBtn);
 
-window.addEventListener('blur', releaseAllButtons);
+window.addEventListener('blur', releaseAllBtns);
 window.addEventListener('pagehide', () => {
-	releaseAllButtons();
+	releaseAllBtns();
 	closeQrScanner();
 	conn?.leave();
 });
@@ -108,28 +99,28 @@ async function connect() {
 	}
 	try {
 		setStatus('Connecting...');
-		conn = new RelayConnection<ControllerState>({
+		conn = new RelayConnection<ContState>({
 			serverUrl  : SERVER_URL,
 			roomId     : roomIdEl.value,
 			displayName: DISPLAY_NAME,
 			autoSync   : false,
 			onEvent    : handleRelayEvent,
-		} satisfies RelayConnectionOptions<ControllerState>);
+		} satisfies RelayConnectionOptions<ContState>);
 		await conn.join();
 	} catch (e) {
 		setStatus(errorMessage(e));
 	}
 }
 
-function handleRelayEvent(ev: RelayEvent<ControllerState>) {
+function handleRelayEvent(ev: RelayEvent<ContState>) {
 	switch (ev.type) {
 		case EVENT_TYPE.open:
 			setStatus('Connected. Waiting for join result...');
 			break;
 		case EVENT_TYPE.joined:
 			isConnected = true;
-			setButtonsEnabled(true);
-			sendControllerState();
+			setBtnsEnabled(true);
+			sendContState();
 			setStatus('Ready.');
 			if (roomDlgEl.matches(':popover-open')) {
 				roomDlgEl.hidePopover();
@@ -140,12 +131,12 @@ function handleRelayEvent(ev: RelayEvent<ControllerState>) {
 			break;
 		case EVENT_TYPE.joinRejected:
 			isConnected = false;
-			setButtonsEnabled(false);
+			setBtnsEnabled(false);
 			setStatus(`Join rejected: ${ev.reason}`);
 			break;
 		case EVENT_TYPE.roomClosed:
 			isConnected = false;
-			setButtonsEnabled(false);
+			setBtnsEnabled(false);
 			setStatus(`Room closed: ${ev.reason}`);
 			break;
 		case EVENT_TYPE.error:
@@ -153,8 +144,8 @@ function handleRelayEvent(ev: RelayEvent<ControllerState>) {
 			break;
 		case EVENT_TYPE.close:
 			isConnected = false;
-			setButtonsEnabled(false);
-			releaseAllButtons();
+			setBtnsEnabled(false);
+			releaseAllBtns();
 			setStatus(`Closed: ${ev.code} ${ev.reason}`.trim());
 			break;
 		case EVENT_TYPE.syncStatus:
@@ -166,85 +157,73 @@ function handleRelayEvent(ev: RelayEvent<ControllerState>) {
 	}
 }
 
-function setupButton(id: string, button: ButtonName) {
+function setupBtn(id: string, btn: BtnName) {
 	const el = $<HTMLButtonElement>(id);
 
-	buttonEls.set(button, el);
-	buttonCounts.set(button, 0);
+	btnEls.set(btn, el);
+	btnCounts.set(btn, 0);
 	el.addEventListener('keydown', (ev) => {
 		if (ev.key !== 'Enter' && ev.key !== ' ') return;
 		ev.preventDefault();
 		if (!isConnected) return;
 
 		const keyId = `${ev.code}:${ev.location}`;
-		if (buttonKeyMap.has(keyId)) return;
+		if (btnKeyMap.has(keyId)) return;
 
-		buttonKeyMap.set(keyId, button);
-		const changed = changeButtonCount(button, 1);
-		if (changed) sendControllerState();
+		btnKeyMap.set(keyId, btn);
+		const changed = changeBtnCount(btn, 1);
+		if (changed) sendContState();
 	});
 	el.addEventListener('keyup', (ev) => {
 		if (ev.key !== 'Enter' && ev.key !== ' ') return;
 		ev.preventDefault();
 
 		const keyId = `${ev.code}:${ev.location}`;
-		const pressedButton = buttonKeyMap.get(keyId);
-		if (pressedButton !== button) return;
+		const pressedBtn = btnKeyMap.get(keyId);
+		if (pressedBtn !== btn) return;
 
-		buttonKeyMap.delete(keyId);
-		const changed = changeButtonCount(button, -1);
-		if (changed) sendControllerState();
+		btnKeyMap.delete(keyId);
+		const changed = changeBtnCount(btn, -1);
+		if (changed) sendContState();
 	});
 	el.addEventListener('blur', () => {
 		let changed = false;
-		for (const [keyId, pressedButton] of buttonKeyMap) {
-			if (pressedButton !== button) continue;
+		for (const [keyId, pressedBtn] of btnKeyMap) {
+			if (pressedBtn !== btn) continue;
 
-			buttonKeyMap.delete(keyId);
-			changed = changeButtonCount(button, -1) || changed;
+			btnKeyMap.delete(keyId);
+			changed = changeBtnCount(btn, -1) || changed;
 		}
-		if (changed) sendControllerState();
+		if (changed) sendContState();
 	});
 }
 
-function setDpadPointerMask(pointerId: number, newMask: number) {
-	const oldMask = dpadPointerMap.get(pointerId) ?? 0;
-	if (oldMask === newMask) return false;
-
-	dpadPointerMap.set(pointerId, newMask);
-
-	let changed = false;
-	for (const direction of DIRECTIONS) {
-		const bit = DIRECTION_BITS[direction];
-		if ((oldMask & bit) === (newMask & bit)) continue;
-		changed = changeButtonCount(direction, (newMask & bit) ? 1 : -1) || changed;
-	}
-	return changed;
-}
-
-function setupDpad(el: HTMLDivElement) {
+function setupPtrCont<T>(el: HTMLElement, pointers: Map<number, T>, neutral: T, getValue: (ev: PointerEvent) => T, setValue: (pointerId: number, value: T) => boolean) {
 	const update = (ev: PointerEvent) => {
-		if (!dpadPointerMap.has(ev.pointerId)) return;
+		if (!pointers.has(ev.pointerId)) return;
 
 		ev.preventDefault();
-		if (setDpadPointerMask(ev.pointerId, getDpadMask(el, ev))) sendControllerState();
+		if (setValue(ev.pointerId, getValue(ev))) {
+			sendContState();
+		}
 	};
 	el.addEventListener('pointerdown', (ev) => {
-		if (!isConnected || dpadPointerMap.has(ev.pointerId)) return;
+		if (!isConnected || pointers.has(ev.pointerId)) return;
 
-		dpadPointerMap.set(ev.pointerId, 0);
+		pointers.set(ev.pointerId, neutral);
 		el.setPointerCapture(ev.pointerId);
 		update(ev);
 	});
 	el.addEventListener('pointermove', update);
+
 	const end = (ev: PointerEvent) => {
-		if (!dpadPointerMap.has(ev.pointerId)) return;
+		if (!pointers.has(ev.pointerId)) return;
 
 		ev.preventDefault();
-		const changed = setDpadPointerMask(ev.pointerId, 0);
-		dpadPointerMap.delete(ev.pointerId);
+		const changed = setValue(ev.pointerId, neutral);
+		pointers.delete(ev.pointerId);
 
-		if (changed) sendControllerState();
+		if (changed) sendContState();
 	};
 	el.addEventListener('pointerup', end);
 	el.addEventListener('pointercancel', end);
@@ -264,163 +243,126 @@ function getDpadMask(el: HTMLElement, ev: PointerEvent): number {
 
 	let m = 0;
 	if (x < 1 / 3) {
-		m |= DIRECTION_BITS.left;
+		m |= DIR_BITS.left;
 	} else if (x > 2 / 3) {
-		m |= DIRECTION_BITS.right;
+		m |= DIR_BITS.right;
 	}
 	if (y < 1 / 3) {
-		m |= DIRECTION_BITS.up;
+		m |= DIR_BITS.up;
 	} else if (y > 2 / 3) {
-		m |= DIRECTION_BITS.down;
+		m |= DIR_BITS.down;
 	}
 	return m;
 }
 
-function changeButtonCount(button: ButtonName, delta: number): boolean {
-	const oldCount = buttonCounts.get(button) ?? 0;
+function setDpadPtrMask(ptrId: number, newMask: number) {
+	const oldMask = dpadPtrMap.get(ptrId) ?? 0;
+	if (oldMask === newMask) return false;
+
+	dpadPtrMap.set(ptrId, newMask);
+
+	let ch = false;
+	for (const d of DIRS) {
+		const bit = DIR_BITS[d];
+		if ((oldMask & bit) === (newMask & bit)) continue;
+		ch = changeBtnCount(d, (newMask & bit) ? 1 : -1) || ch;
+	}
+	return ch;
+}
+
+function getFaceBtn(ev: PointerEvent): FaceBtnName | null {
+	for (const b of FACE_BTNS) {
+		const r = btnEls.get(b)?.getBoundingClientRect();
+		if (!r) continue;
+
+		if (
+			ev.clientX >= r.left &&
+			ev.clientX <= r.right &&
+			ev.clientY >= r.top &&
+			ev.clientY <= r.bottom
+		) {
+			return b;
+		}
+	}
+	return null;
+}
+
+function setFacePtrBtn(ptrId: number, newBtn: FaceBtnName | null): boolean {
+	const oldBtn = facePtrMap.get(ptrId) ?? null;
+	if (oldBtn === newBtn) return false;
+
+	facePtrMap.set(ptrId, newBtn);
+
+	let ch = false;
+	if (oldBtn) {
+		ch = changeBtnCount(oldBtn, -1) || ch;
+	}
+	if (newBtn) {
+		ch = changeBtnCount(newBtn, 1) || ch;
+	}
+	return ch;
+}
+
+function releaseAllBtns() {
+	dpadPtrMap.clear();
+	facePtrMap.clear();
+	btnKeyMap.clear();
+
+	let ch = false;
+	for (const [btn, count] of btnCounts) {
+		if (count > 0) {
+			ch = changeBtnCount(btn, -count) || ch;
+		}
+	}
+	if (ch) sendContState();
+}
+
+function changeBtnCount(btn: BtnName, delta: number): boolean {
+	const oldCount = btnCounts.get(btn) ?? 0;
 	const newCount = Math.max(0, oldCount + delta);
 
 	if (oldCount === newCount) return false;
 
-	buttonCounts.set(button, newCount);
-	updateButtonView(button);
+	btnCounts.set(btn, newCount);
+	updateBtnView(btn);
 
 	return (oldCount > 0) !== (newCount > 0);
 }
 
-function setupFace(el: HTMLDivElement) {
-	const update = (ev: PointerEvent) => {
-		if (!facePointerMap.has(ev.pointerId)) {
-			return;
-		}
-		ev.preventDefault();
-		if (setFacePointerButton(ev.pointerId, getFaceButton(ev))) {
-			sendControllerState();
-		}
-	};
-
-	el.addEventListener('pointerdown', (ev) => {
-		if (!isConnected || facePointerMap.has(ev.pointerId)) {
-			return;
-		}
-
-		facePointerMap.set(ev.pointerId, null);
-		el.setPointerCapture(ev.pointerId);
-		update(ev);
-	});
-
-	el.addEventListener('pointermove', update);
-
-	const end = (ev: PointerEvent) => {
-		if (!facePointerMap.has(ev.pointerId)) {
-			return;
-		}
-
-		ev.preventDefault();
-		const changed = setFacePointerButton(ev.pointerId, null);
-		facePointerMap.delete(ev.pointerId);
-
-		if (changed) {
-			sendControllerState();
-		}
-	};
-
-	el.addEventListener('pointerup', end);
-	el.addEventListener('pointercancel', end);
-	el.addEventListener('lostpointercapture', end);
-}
-
-function setFacePointerButton(pointerId: number, newButton: FaceButtonName | null): boolean {
-	const oldButton = facePointerMap.get(pointerId) ?? null;
-	if (oldButton === newButton) {
-		return false;
-	}
-
-	facePointerMap.set(pointerId, newButton);
-
-	let changed = false;
-	if (oldButton) {
-		changed = changeButtonCount(oldButton, -1) || changed;
-	}
-	if (newButton) {
-		changed = changeButtonCount(newButton, 1) || changed;
-	}
-
-	return changed;
-}
-
-function getFaceButton(ev: PointerEvent): FaceButtonName | null {
-	for (const button of FACE_BUTTONS) {
-		const rect = buttonEls.get(button)?.getBoundingClientRect();
-		if (!rect) {
-			continue;
-		}
-
-		if (
-			ev.clientX >= rect.left &&
-			ev.clientX <= rect.right &&
-			ev.clientY >= rect.top &&
-			ev.clientY <= rect.bottom
-		) {
-			return button;
-		}
-	}
-
-	return null;
-}
-
-
-
-function releaseAllButtons() {
-	dpadPointerMap.clear();
-	facePointerMap.clear();
-	buttonKeyMap.clear();
-	let changed = false;
-
-	for (const button of buttonCounts.keys()) {
-		const oldCount = buttonCounts.get(button) ?? 0;
-
-		if (oldCount > 0) {
-			changed = changeButtonCount(button, -oldCount) || changed;
-		}
-	}
-	if (changed) sendControllerState();
-}
-
-function createControllerState(): ControllerState {
+function createContState(): ContState {
 	return {
-		up   : isButtonPressed('up'),
-		down : isButtonPressed('down'),
-		left : isButtonPressed('left'),
-		right: isButtonPressed('right'),
-		a    : isButtonPressed('a'),
-		b    : isButtonPressed('b'),
-		x    : isButtonPressed('x'),
-		y    : isButtonPressed('y'),
+		up   : isBtnPressed('up'),
+		down : isBtnPressed('down'),
+		left : isBtnPressed('left'),
+		right: isBtnPressed('right'),
+		a    : isBtnPressed('a'),
+		b    : isBtnPressed('b'),
+		x    : isBtnPressed('x'),
+		y    : isBtnPressed('y'),
 	};
 }
 
-function isButtonPressed(button: ButtonName): boolean {
-	return (buttonCounts.get(button) ?? 0) > 0;
+function isBtnPressed(btn: BtnName): boolean {
+	return (btnCounts.get(btn) ?? 0) > 0;
 }
 
-function sendControllerState() {
+function sendContState() {
 	if (!isConnected) return;
 	try {
-		conn?.sendData(createControllerState());
+		conn?.sendData(createContState());
 	} catch (e) {
 		setStatus(errorMessage(e));
 	}
 }
 
-function updateButtonView(button: ButtonName) {
-	const el = buttonEls.get(button);
+function updateBtnView(btn: BtnName) {
+	const el = btnEls.get(btn);
 	if (!el) return;
-	el.classList.toggle('pressed', isButtonPressed(button));
+	el.classList.toggle('pressed', isBtnPressed(btn));
 }
 
-function setButtonsEnabled(enabled: boolean) {
-	for (const el of buttonEls.values()) {
+function setBtnsEnabled(enabled: boolean) {
+	for (const el of btnEls.values()) {
 		el.disabled = !enabled;
 	}
 }
@@ -523,5 +465,5 @@ function toSafeWebUrl(value: string): string | null {
 	}
 }
 
-setButtonsEnabled(false);
+setBtnsEnabled(false);
 setStatus('Not connected.');
